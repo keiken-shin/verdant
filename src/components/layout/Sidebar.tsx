@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   Plus,
@@ -48,7 +48,7 @@ function NavItem({
     <button
       onClick={handleClick}
       className={cn(
-        "w-full flex items-center justify-between px-3 py-2 rounded-md text-sm transition-colors group",
+        "w-full flex items-center justify-between px-3 py-2 rounded-md text-sm transition-colors group cursor-pointer",
         active
           ? "bg-[var(--color-verdant-active)] text-[var(--color-verdant-primary)] font-medium"
           : "text-[var(--color-verdant-text)] hover:bg-[var(--color-verdant-hover)]",
@@ -67,7 +67,9 @@ function NavItem({
         <span>{label}</span>
       </div>
       {shortcut && (
-        <span className="text-[11px] text-zinc-400 font-mono">{shortcut}</span>
+        <span className="text-[11px] text-zinc-400 font-mono opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+          {shortcut}
+        </span>
       )}
     </button>
   );
@@ -145,10 +147,22 @@ export function Sidebar() {
     return path.startsWith(route);
   };
 
-  const handleNewChat = async () => {
+  const handleNewChat = useCallback(async () => {
     const session = await createSession("Untitled");
     navigate(`/chat/${session.id}`);
-  };
+  }, [createSession, navigate]);
+
+  // Keyboard shortcut listener for New Chat (Cmd+N / Ctrl+N)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "n") {
+        e.preventDefault();
+        handleNewChat();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [handleNewChat]);
 
   // Get the 4 most recent sessions for sidebar "RECENT"
   const recentSessions = sessions.slice(0, 4);
@@ -190,6 +204,7 @@ export function Sidebar() {
           icon={<Search className="h-4 w-4" />}
           label="Search"
           onClick={openSearch}
+          shortcut="⌘K"
         />
 
         {/* Sessions */}
