@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { PanelRight } from 'lucide-react';
+import { PanelRight, Edit2, Trash2, Check, X } from 'lucide-react';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { UserMessage, AssistantMessage, StreamingMessage } from '@/components/chat/MessageBubbles';
 import { SectionLabel } from '@/components/ui/PageHeader';
@@ -52,7 +52,7 @@ export function ChatPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
 
-  const { sessions, createSession, updateSession } = useSessionStore();
+  const { sessions, createSession, updateSession, deleteSession } = useSessionStore();
   const { messagesBySession, streamingContent, isStreaming, fetchMessages, addMessage, setIsStreaming, setStreamingContent, appendStreamingContent, setAbortController, stopStreaming } = useMessageStore();
   const { providers, models: providerModels, activeModelId, setActiveModel, isConnected, setIsConnected } = useProviderStore();
   const { settings } = useSettingsStore();
@@ -188,6 +188,38 @@ export function ChatPage() {
     // Re-trigger conversation from that message
   }, []);
 
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [tempTitle, setTempTitle] = useState('');
+
+  useEffect(() => {
+    if (currentSession) {
+      setTempTitle(currentSession.title);
+    }
+  }, [currentSession]);
+
+  const handleRenameSave = async () => {
+    if (sessionId && tempTitle.trim() && tempTitle !== currentSession?.title) {
+      await updateSession(sessionId, { title: tempTitle.trim() });
+    }
+    setIsEditingTitle(false);
+  };
+
+  const handleRenameCancel = () => {
+    if (currentSession) {
+      setTempTitle(currentSession.title);
+    }
+    setIsEditingTitle(false);
+  };
+
+  const handleDeleteSession = async () => {
+    if (sessionId) {
+      if (window.confirm('Are you sure you want to delete this session? This action cannot be undone.')) {
+        await deleteSession(sessionId);
+        navigate('/');
+      }
+    }
+  };
+
   const hasMessages = messages.length > 0;
   const modelName = activeModelId?.split(':')[0] || 'model';
 
@@ -196,7 +228,71 @@ export function ChatPage() {
       {/* Header */}
       <div className="flex items-center justify-between px-8 py-4 border-b border-zinc-100">
         <div className="flex items-center gap-2 text-sm text-zinc-500">
-          <span className="text-zinc-400">{currentSession?.title || 'Untitled'}</span>
+          {isEditingTitle ? (
+            <div className="flex items-center gap-1">
+              <input
+                type="text"
+                value={tempTitle}
+                onChange={(e) => setTempTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleRenameSave();
+                  if (e.key === 'Escape') handleRenameCancel();
+                }}
+                autoFocus
+                className="px-2 py-0.5 text-sm border border-zinc-200 rounded outline-none focus:border-zinc-400 text-zinc-800"
+              />
+              <button
+                onClick={handleRenameSave}
+                className="p-1 rounded hover:bg-zinc-100 text-emerald-600"
+                title="Save title"
+              >
+                <Check className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={handleRenameCancel}
+                className="p-1 rounded hover:bg-zinc-100 text-red-500"
+                title="Cancel"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 group/title">
+              <span
+                onClick={() => {
+                  if (currentSession) {
+                    setTempTitle(currentSession.title);
+                    setIsEditingTitle(true);
+                  }
+                }}
+                className="text-zinc-600 font-medium cursor-pointer hover:text-zinc-900 transition-colors"
+                title="Click to rename"
+              >
+                {currentSession?.title || 'Untitled'}
+              </span>
+              <button
+                onClick={() => {
+                  if (currentSession) {
+                    setTempTitle(currentSession.title);
+                    setIsEditingTitle(true);
+                  }
+                }}
+                className="p-0.5 rounded text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 opacity-0 group-hover/title:opacity-100 transition-opacity"
+                title="Rename session"
+              >
+                <Edit2 className="h-3.5 w-3.5" />
+              </button>
+              {sessionId && (
+                <button
+                  onClick={handleDeleteSession}
+                  className="p-0.5 rounded text-zinc-400 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover/title:opacity-100 transition-opacity"
+                  title="Delete session"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          )}
           {activeModelId && (
             <>
               <span className="text-zinc-300">·</span>

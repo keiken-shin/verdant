@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
-  Plus, Search, MessageSquare, Brain, Network, Cpu, Settings
+  Plus, Search, MessageSquare, Brain, Network, Cpu, Settings, MoreHorizontal, Edit2, Trash2
 } from 'lucide-react';
 import { cn } from '@/utils';
 import { useSessionStore } from '@/stores/sessionStore';
@@ -71,10 +71,41 @@ export function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { openSearch } = useUiStore();
-  const { sessions, createSession } = useSessionStore();
+  const { sessions, createSession, updateSession, deleteSession } = useSessionStore();
   const { isConnected, providers } = useProviderStore();
 
   const path = location.pathname;
+
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [activeMenuSessionId, setActiveMenuSessionId] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setActiveMenuSessionId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSaveRename = async (id: string) => {
+    if (editTitle.trim() && editTitle.trim() !== sessions.find((s) => s.id === id)?.title) {
+      await updateSession(id, { title: editTitle.trim() });
+    }
+    setEditingSessionId(null);
+  };
+
+  const handleDeleteSession = async (id: string) => {
+    if (window.confirm('Are you sure you want to delete this session? This action cannot be undone.')) {
+      await deleteSession(id);
+      if (path === `/chat/${id}`) {
+        navigate('/');
+      }
+    }
+  };
   const isActive = (route: string) => {
     if (route === '/') return path === '/' || path.startsWith('/chat');
     return path.startsWith(route);
@@ -172,20 +203,93 @@ export function Sidebar() {
               <span className="section-label">Recent</span>
             </div>
             <div className="space-y-0.5">
-              {recentSessions.map((session) => (
-                <button
-                  key={session.id}
-                  onClick={() => navigate(`/chat/${session.id}`)}
-                  className={cn(
-                    'w-full text-left px-3 py-1.5 rounded text-sm transition-colors truncate',
-                    path === `/chat/${session.id}`
-                      ? 'text-[var(--color-wollama-primary)]'
-                      : 'text-[var(--color-wollama-text)] hover:text-zinc-800'
-                  )}
-                >
-                  {truncate(session.title, 28)}
-                </button>
-              ))}
+              {recentSessions.map((session) => {
+                const isEditing = editingSessionId === session.id;
+                const isMenuOpen = activeMenuSessionId === session.id;
+                const isSessionActive = path === `/chat/${session.id}`;
+
+                return (
+                  <div
+                    key={session.id}
+                    className="relative group w-full flex items-center px-1"
+                  >
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveRename(session.id);
+                          if (e.key === 'Escape') setEditingSessionId(null);
+                        }}
+                        onBlur={() => handleSaveRename(session.id)}
+                        autoFocus
+                        className="w-full px-2 py-1 text-xs border border-zinc-200 rounded bg-white outline-none focus:border-zinc-300 text-zinc-800 font-normal"
+                      />
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => navigate(`/chat/${session.id}`)}
+                          className={cn(
+                            'w-full text-left pl-2 pr-7 py-1.5 rounded text-sm transition-colors truncate cursor-pointer',
+                            isSessionActive
+                              ? 'bg-[var(--color-wollama-active)] text-[var(--color-wollama-primary)] font-medium'
+                              : 'text-[var(--color-wollama-text)] hover:bg-[var(--color-wollama-hover)] hover:text-zinc-800'
+                          )}
+                        >
+                          {truncate(session.title, 22)}
+                        </button>
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveMenuSessionId(isMenuOpen ? null : session.id);
+                          }}
+                          className={cn(
+                            'absolute right-2 p-1 rounded hover:bg-zinc-200/50 text-zinc-400 hover:text-zinc-600 transition-all shrink-0 cursor-pointer',
+                            isMenuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                          )}
+                          title="Session actions"
+                          aria-label="Session actions"
+                        >
+                          <MoreHorizontal className="h-3.5 w-3.5" />
+                        </button>
+
+                        {isMenuOpen && (
+                          <div
+                            ref={menuRef}
+                            className="absolute top-full right-2 mt-1 w-24 bg-white rounded shadow-lg border border-zinc-200 py-1 z-50 text-[11px]"
+                          >
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditTitle(session.title);
+                                setEditingSessionId(session.id);
+                                setActiveMenuSessionId(null);
+                              }}
+                              className="w-full flex items-center gap-1.5 px-2.5 py-1.5 hover:bg-zinc-50 text-zinc-600 hover:text-zinc-800 transition-colors cursor-pointer"
+                            >
+                              <Edit2 className="h-3 w-3 shrink-0" />
+                              <span>Rename</span>
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteSession(session.id);
+                                setActiveMenuSessionId(null);
+                              }}
+                              className="w-full flex items-center gap-1.5 px-2.5 py-1.5 hover:bg-red-50 text-red-500 hover:text-red-600 transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="h-3 w-3 shrink-0" />
+                              <span>Delete</span>
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
