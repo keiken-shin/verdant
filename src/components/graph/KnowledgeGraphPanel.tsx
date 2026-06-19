@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -8,8 +8,9 @@ import ReactFlow, {
   type Edge as FlowEdge,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { X, Network } from 'lucide-react';
+import { Network, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
+import { cn } from '@/utils';
 import { KnowledgeGraphNode } from './KnowledgeGraphNode';
 import { useGraphStore } from '@/stores/graphStore';
 import { useUiStore } from '@/stores/uiStore';
@@ -28,7 +29,7 @@ const nodeTypes = {
 
 export function KnowledgeGraphPanel() {
   const { nodes: storeNodes, edges: storeEdges, fetchGraph, addNode, addEdge } = useGraphStore();
-  const { closeSearch, setGraphPanelOpen } = useUiStore();
+  const { closeSearch, graphPanelOpen, toggleGraphPanel } = useUiStore();
   const { messagesBySession } = useMessageStore();
   const { settings } = useSettingsStore();
   const { providers, activeModelId } = useProviderStore();
@@ -41,6 +42,31 @@ export function KnowledgeGraphPanel() {
   const match = location.pathname.match(/\/chat\/([^/]+)/);
   const sessionId = match ? match[1] : undefined;
   const sessionMessages = sessionId ? (messagesBySession[sessionId] || []) : [];
+
+  const [width, setWidth] = useState(288); // Default w-72 = 288px
+  const [logoHovered, setLogoHovered] = useState(false);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = width;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const deltaX = startX - moveEvent.clientX;
+      const newWidth = Math.max(200, Math.min(800, startWidth + deltaX));
+      setWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'default';
+    };
+
+    document.body.style.cursor = 'col-resize';
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
 
   useEffect(() => {
     fetchGraph();
@@ -187,76 +213,120 @@ export function KnowledgeGraphPanel() {
   }, [displayEdges]);
 
   return (
-    <div className="w-72 shrink-0 border-l border-zinc-100 flex flex-col bg-[var(--color-verdant-bg)]">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100">
-        <div className="flex items-center gap-2">
-          <Network className="h-3.5 w-3.5 text-zinc-400" />
-          <span className="text-xs font-medium text-zinc-600">Knowledge Graph</span>
+    <div 
+      className={cn(
+        "relative shrink-0 border-l border-zinc-100 flex flex-col bg-[var(--color-verdant-bg)] transition-all duration-200 ease-in-out overflow-x-hidden",
+        graphPanelOpen ? "" : "w-14"
+      )}
+      style={graphPanelOpen ? { width: `${width}px` } : undefined}
+    >
+      {/* Resizer */}
+      {graphPanelOpen && (
+        <div
+          className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-[var(--color-verdant-primary)] z-10 group"
+          onMouseDown={handleMouseDown}
+        >
+          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity rounded-full" />
         </div>
-        <div className="flex items-center gap-1.5">
-          {sessionId && sessionMessages.length > 0 && (
-            <button
-              onClick={handleExtract}
-              disabled={extracting}
-              className="px-2 py-1 text-[10px] font-medium border border-zinc-200 rounded hover:bg-zinc-50 disabled:opacity-50 text-zinc-600 transition-all flex items-center gap-1"
-            >
-              {extracting ? 'Extracting...' : 'Extract'}
-            </button>
-          )}
-          <button
-            onClick={() => setGraphPanelOpen(false)}
-            className="p-1 rounded hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600 transition-colors"
-            aria-label="Close graph panel"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </div>
+      )}
 
-      {/* Graph */}
-      <div className="flex-1 relative">
-        {displayNodes.length === 0 ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
-            <div className="text-zinc-200 mb-3">
-              <Network className="h-10 w-10 mx-auto" />
-            </div>
-            <p className="text-xs text-zinc-400 leading-relaxed mb-3">
-              Extract ideas from this conversation to build your knowledge graph.
-            </p>
+      {/* Header */}
+      {graphPanelOpen ? (
+        <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100">
+          <div className="flex items-center gap-2">
+            <Network className="h-3.5 w-3.5 text-zinc-400" />
+            <span className="text-xs font-medium text-zinc-600">Knowledge Graph</span>
+          </div>
+          <div className="flex items-center gap-1.5">
             {sessionId && sessionMessages.length > 0 && (
               <button
                 onClick={handleExtract}
                 disabled={extracting}
-                className="px-3 py-1.5 text-xs text-white bg-zinc-900 hover:bg-zinc-700 rounded-md transition-colors disabled:opacity-50"
+                className="px-2 py-1 text-[10px] font-medium border border-zinc-200 rounded hover:bg-zinc-50 disabled:opacity-50 text-zinc-600 transition-all flex items-center gap-1"
               >
-                {extracting ? 'Extracting...' : 'Extract ideas'}
+                {extracting ? 'Extracting...' : 'Extract'}
               </button>
             )}
+            <button
+              onClick={() => toggleGraphPanel()}
+              className="p-1 rounded hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600 transition-colors cursor-pointer"
+              title="Collapse panel"
+              aria-label="Collapse panel"
+            >
+              <PanelRightClose className="h-3.5 w-3.5" />
+            </button>
           </div>
-        ) : (
-          <ReactFlow
-            nodes={flowNodes}
-            edges={flowEdges}
-            nodeTypes={nodeTypes}
-            fitView
-            fitViewOptions={{ padding: 0.2 }}
-            nodesDraggable={false}
-            nodesConnectable={false}
-            elementsSelectable={false}
-            panOnDrag={true}
-            zoomOnScroll={true}
-            panOnScroll={false}
-            deleteKeyCode={null}
-            proOptions={{ hideAttribution: true }}
-          >
-            <Background variant={BackgroundVariant.Dots} color="#e4e4e7" size={1} gap={12} />
-          </ReactFlow>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div 
+          className="py-3 flex items-center justify-center border-b border-zinc-100"
+          onMouseEnter={() => setLogoHovered(true)}
+          onMouseLeave={() => setLogoHovered(false)}
+        >
+          <div className="flex items-center justify-center w-[34px] h-[34px] shrink-0">
+            {logoHovered ? (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleGraphPanel();
+                }}
+                className="p-1.5 rounded hover:bg-zinc-100 text-zinc-500 hover:text-zinc-800 transition-colors cursor-pointer"
+                title="Expand panel"
+              >
+                <PanelRightOpen className="h-4 w-4" />
+              </button>
+            ) : (
+              <Network className="h-4 w-4 text-zinc-400" />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Graph */}
+      {graphPanelOpen && (
+        <div className="flex-1 relative">
+          {displayNodes.length === 0 ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
+              <div className="text-zinc-200 mb-3">
+                <Network className="h-10 w-10 mx-auto" />
+              </div>
+              <p className="text-xs text-zinc-400 leading-relaxed mb-3">
+                Extract ideas from this conversation to build your knowledge graph.
+              </p>
+              {sessionId && sessionMessages.length > 0 && (
+                <button
+                  onClick={handleExtract}
+                  disabled={extracting}
+                  className="px-3 py-1.5 text-xs text-white bg-zinc-900 hover:bg-zinc-700 rounded-md transition-colors disabled:opacity-50"
+                >
+                  {extracting ? 'Extracting...' : 'Extract ideas'}
+                </button>
+              )}
+            </div>
+          ) : (
+            <ReactFlow
+              nodes={flowNodes}
+              edges={flowEdges}
+              nodeTypes={nodeTypes}
+              fitView
+              fitViewOptions={{ padding: 0.2 }}
+              nodesDraggable={false}
+              nodesConnectable={false}
+              elementsSelectable={false}
+              panOnDrag={true}
+              zoomOnScroll={true}
+              panOnScroll={false}
+              deleteKeyCode={null}
+              proOptions={{ hideAttribution: true }}
+            >
+              <Background variant={BackgroundVariant.Dots} color="#e4e4e7" size={1} gap={12} />
+            </ReactFlow>
+          )}
+        </div>
+      )}
 
       {/* Node count */}
-      {displayNodes.length > 0 && (
+      {graphPanelOpen && displayNodes.length > 0 && (
         <div className="px-4 py-2 border-t border-zinc-100">
           <div className="flex flex-wrap gap-1.5">
             {Array.from(new Set(displayNodes.map((n) => n.category))).map((cat) => {

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { PanelRight, Edit2, Trash2, Check, X } from 'lucide-react';
+import { Edit2, Trash2, Check, X } from 'lucide-react';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { UserMessage, AssistantMessage, StreamingMessage } from '@/components/chat/MessageBubbles';
 import { SectionLabel } from '@/components/ui/PageHeader';
@@ -8,7 +8,7 @@ import { useSessionStore } from '@/stores/sessionStore';
 import { useMessageStore } from '@/stores/messageStore';
 import { useProviderStore } from '@/stores/providerStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useUiStore } from '@/stores/uiStore';
+
 import { providerRegistry } from '@/providers/registry';
 import type { ModelInfo } from '@/types';
 
@@ -56,7 +56,7 @@ export function ChatPage() {
   const { messagesBySession, streamingContent, isStreaming, fetchMessages, addMessage, setIsStreaming, setStreamingContent, appendStreamingContent, setAbortController, stopStreaming } = useMessageStore();
   const { providers, models: providerModels, activeModelId, setActiveModel, isConnected, setIsConnected } = useProviderStore();
   const { settings } = useSettingsStore();
-  const { graphPanelOpen, toggleGraphPanel } = useUiStore();
+
 
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
@@ -300,19 +300,7 @@ export function ChatPage() {
             </>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={toggleGraphPanel}
-            className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 transition-colors"
-            title="Toggle knowledge graph panel"
-            aria-label="Toggle knowledge graph panel"
-          >
-            <PanelRight className="h-4 w-4" />
-          </button>
-          <span className="text-xs text-zinc-300 tracking-widest uppercase ml-2">
-            Knowledge Graph
-          </span>
-        </div>
+
       </div>
 
       {/* Messages / Welcome */}

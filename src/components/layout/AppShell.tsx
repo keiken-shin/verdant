@@ -12,7 +12,7 @@ export function AppShell() {
 
   // Only show the graph panel when on a chat route
   const isChatRoute = location.pathname === '/' || location.pathname.startsWith('/chat');
-  const showPanel = graphPanelOpen && isChatRoute;
+  const showPanel = isChatRoute;
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[var(--color-verdant-bg)]">
@@ -20,7 +20,7 @@ export function AppShell() {
       <Sidebar />
 
       {/* Center: Main Content */}
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main className="flex-1 flex flex-col overflow-hidden relative">
         <div className="flex-1 overflow-y-auto">
           <Outlet />
         </div>

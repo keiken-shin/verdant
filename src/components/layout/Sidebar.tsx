@@ -11,6 +11,8 @@ import {
   MoreHorizontal,
   Edit2,
   Trash2,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { cn } from "@/utils";
 import { useSessionStore } from "@/stores/sessionStore";
@@ -38,6 +40,7 @@ function NavItem({
   className,
 }: NavItemProps) {
   const navigate = useNavigate();
+  const { sidebarCollapsed } = useUiStore();
 
   const handleClick = () => {
     if (onClick) onClick();
@@ -47,15 +50,17 @@ function NavItem({
   return (
     <button
       onClick={handleClick}
+      title={sidebarCollapsed ? label : undefined}
       className={cn(
-        "w-full flex items-center justify-between px-3 py-2 rounded-md text-sm transition-colors group cursor-pointer",
+        "w-full flex items-center rounded-md text-sm transition-colors group cursor-pointer",
+        sidebarCollapsed ? "justify-center px-0 py-2.5" : "justify-between px-3 py-2",
         active
           ? "bg-[var(--color-verdant-active)] text-[var(--color-verdant-primary)] font-medium"
           : "text-[var(--color-verdant-text)] hover:bg-[var(--color-verdant-hover)]",
         className,
       )}
     >
-      <div className="flex items-center gap-3">
+      <div className={cn("flex items-center", sidebarCollapsed ? "justify-center" : "gap-3")}>
         <span
           className={cn(
             "h-4 w-4 shrink-0",
@@ -64,9 +69,9 @@ function NavItem({
         >
           {icon}
         </span>
-        <span>{label}</span>
+        {!sidebarCollapsed && <span>{label}</span>}
       </div>
-      {shortcut && (
+      {!sidebarCollapsed && shortcut && (
         <span className="text-[11px] text-zinc-400 font-mono opacity-0 group-hover:opacity-100 transition-opacity duration-150">
           {shortcut}
         </span>
@@ -96,7 +101,7 @@ function VerdantLogo() {
 export function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { openSearch } = useUiStore();
+  const { openSearch, toggleSidebar, sidebarCollapsed } = useUiStore();
   const { sessions, createSession, updateSession, deleteSession } =
     useSessionStore();
   const { isConnected, providers } = useProviderStore();
@@ -108,6 +113,7 @@ export function Sidebar() {
   const [activeMenuSessionId, setActiveMenuSessionId] = useState<string | null>(
     null,
   );
+  const [logoHovered, setLogoHovered] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -171,25 +177,69 @@ export function Sidebar() {
   const defaultProvider = providers.find((p) => p.is_default) || providers[0];
 
   return (
-    <aside className="flex flex-col w-[210px] shrink-0 bg-[var(--color-verdant-sidebar-bg)] border-r border-[var(--color-verdant-border)] h-full">
+    <aside 
+      className={cn(
+        "flex flex-col shrink-0 bg-[var(--color-verdant-sidebar-bg)] border-r border-[var(--color-verdant-border)] h-full transition-all duration-200 ease-in-out overflow-x-hidden",
+        sidebarCollapsed ? "w-14" : "w-[210px]"
+      )}
+    >
       {/* Header */}
-      <div className="px-4 pt-5 pb-4">
-        <button
-          onClick={() => navigate("/")}
-          className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+      {sidebarCollapsed ? (
+        <div 
+          className="pt-5 pb-4 flex items-center justify-center px-0"
+          onMouseEnter={() => setLogoHovered(true)}
+          onMouseLeave={() => setLogoHovered(false)}
         >
-          <VerdantLogo />
-          <div className="leading-tight flex items-start flex-col">
-            <div className="text-lg font-semibold text-zinc-900">Verdant</div>
-            <div className="text-xs font-semibold tracking-widest uppercase text-zinc-400">
-              LOCAL · PRIVATE
-            </div>
+          <div className="flex items-center justify-center w-[34px] h-[34px] shrink-0">
+            {logoHovered ? (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleSidebar();
+                }}
+                className="p-1.5 rounded hover:bg-[var(--color-verdant-hover)] text-zinc-500 hover:text-zinc-800 transition-colors cursor-pointer"
+                title="Expand sidebar"
+              >
+                <PanelLeftOpen className="h-4 w-4" />
+              </button>
+            ) : (
+              <div className="cursor-pointer" onClick={() => navigate("/")}>
+                <VerdantLogo />
+              </div>
+            )}
           </div>
-        </button>
-      </div>
+        </div>
+      ) : (
+        <div className="px-4 pt-5 pb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={() => navigate("/")}
+              className="cursor-pointer shrink-0 hover:opacity-80 transition-opacity"
+            >
+              <VerdantLogo />
+            </button>
+            <button
+              onClick={() => navigate("/")}
+              className="flex flex-col items-start leading-tight hover:opacity-80 transition-opacity text-left"
+            >
+              <div className="text-sm font-semibold text-zinc-900">Verdant</div>
+              <div className="text-[9px] font-semibold tracking-widest uppercase text-zinc-400">
+                LOCAL · PRIVATE
+              </div>
+            </button>
+          </div>
+          <button
+            onClick={toggleSidebar}
+            className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-600 hover:bg-[var(--color-verdant-hover)] transition-colors cursor-pointer shrink-0"
+            title="Collapse sidebar"
+          >
+            <PanelLeftClose className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {/* Navigation */}
-      <nav className="flex-1 px-2 space-y-0.5 overflow-y-auto">
+      <nav className={cn("flex-1 space-y-0.5 overflow-y-auto", sidebarCollapsed ? "px-1" : "px-2")}>
         {/* New Chat */}
         <NavItem
           icon={<Plus className="h-4 w-4" />}
@@ -248,7 +298,7 @@ export function Sidebar() {
         />
 
         {/* Recent Sessions */}
-        {recentSessions.length > 0 && (
+        {recentSessions.length > 0 && !sidebarCollapsed && (
           <div className="pt-5 pb-1">
             <div className="px-3 pb-2">
               <span className="section-label">Recent</span>
@@ -351,27 +401,37 @@ export function Sidebar() {
       </nav>
 
       {/* Footer — Provider Status */}
-      <div className="px-4 py-3 border-t border-[var(--color-verdant-border)]">
-        <div className="flex items-center justify-between text-xs text-zinc-400">
-          <div className="flex items-center gap-1.5">
-            <div
-              className={cn(
-                "h-1.5 w-1.5 rounded-full",
-                isConnected ? "bg-emerald-500" : "bg-zinc-300",
-              )}
-            />
-            <span className="font-mono text-[11px]">
-              {defaultProvider?.name.toLowerCase() || "ollama"}
-            </span>
-            <span>·</span>
-            <span className="font-mono text-[11px] truncate max-w-[70px]">
-              {defaultProvider?.endpoint
-                .replace("http://", "")
-                .replace("https://", "") || "localhost"}
-            </span>
+      <div className={cn("border-t border-[var(--color-verdant-border)]", sidebarCollapsed ? "py-3 flex justify-center" : "px-4 py-3")}>
+        {sidebarCollapsed ? (
+          <div
+            className={cn(
+              "h-2 w-2 rounded-full",
+              isConnected ? "bg-emerald-500" : "bg-zinc-300",
+            )}
+            title={isConnected ? `Connected: ${defaultProvider?.name || 'ollama'}` : 'Disconnected'}
+          />
+        ) : (
+          <div className="flex items-center justify-between text-xs text-zinc-400">
+            <div className="flex items-center gap-1.5">
+              <div
+                className={cn(
+                  "h-1.5 w-1.5 rounded-full",
+                  isConnected ? "bg-emerald-500" : "bg-zinc-300",
+                )}
+              />
+              <span className="font-mono text-[11px]">
+                {defaultProvider?.name.toLowerCase() || "ollama"}
+              </span>
+              <span>·</span>
+              <span className="font-mono text-[11px] truncate max-w-[70px]">
+                {defaultProvider?.endpoint
+                  .replace("http://", "")
+                  .replace("https://", "") || "localhost"}
+              </span>
+            </div>
+            <span className="font-mono text-[11px]">v0.1.0</span>
           </div>
-          <span className="font-mono text-[11px]">v0.1.0</span>
-        </div>
+        )}
       </div>
     </aside>
   );
