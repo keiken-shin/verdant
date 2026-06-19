@@ -284,7 +284,7 @@ export function Sidebar() {
                             );
                           }}
                           className={cn(
-                            "absolute right-2 p-1 rounded hover:bg-zinc-200/50 text-zinc-400 hover:text-zinc-600 transition-all shrink-0 cursor-pointer",
+                            "absolute right-2 p-1 rounded hover:bg-[var(--color-verdant-hover)] text-[var(--color-verdant-muted)] hover:text-[var(--color-verdant-text)] transition-all shrink-0 cursor-pointer",
                             isMenuOpen
                               ? "opacity-100"
                               : "opacity-0 group-hover:opacity-100",
@@ -298,7 +298,7 @@ export function Sidebar() {
                         {isMenuOpen && (
                           <div
                             ref={menuRef}
-                            className="absolute top-full right-2 mt-1 w-24 bg-white rounded shadow-lg border border-zinc-200 py-1 z-50 text-[11px]"
+                            className="absolute top-full right-2 mt-1 w-48 bg-[var(--color-verdant-surface)] rounded shadow-lg border border-[var(--color-verdant-border)] py-1 z-50 text-[11px]"
                           >
                             <button
                               onClick={(e) => {
@@ -307,7 +307,7 @@ export function Sidebar() {
                                 setEditingSessionId(session.id);
                                 setActiveMenuSessionId(null);
                               }}
-                              className="w-full flex items-center gap-1.5 px-2.5 py-1.5 hover:bg-zinc-50 text-zinc-600 hover:text-zinc-800 transition-colors cursor-pointer"
+                              className="w-full flex items-center gap-1.5 px-2.5 py-1.5 hover:bg-[var(--color-verdant-hover)] text-[var(--color-verdant-text)] hover:text-[var(--color-verdant-accent)] transition-colors cursor-pointer"
                             >
                               <Edit2 className="h-3 w-3 shrink-0" />
                               <span>Rename</span>
@@ -318,7 +318,7 @@ export function Sidebar() {
                                 handleDeleteSession(session.id);
                                 setActiveMenuSessionId(null);
                               }}
-                              className="w-full flex items-center gap-1.5 px-2.5 py-1.5 hover:bg-red-50 text-red-500 hover:text-red-600 transition-colors cursor-pointer"
+                              className="w-full flex items-center gap-1.5 px-2.5 py-1.5 hover:bg-red-50 text-red-600 hover:text-red-700 transition-colors cursor-pointer"
                             >
                               <Trash2 className="h-3 w-3 shrink-0" />
                               <span>Delete</span>
