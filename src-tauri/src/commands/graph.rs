@@ -191,6 +191,7 @@ pub fn delete_graph_edge(id: String, db: State<Database>) -> Result<(), String> 
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct BulkImportInput {
     pub nodes: Vec<CreateNodeInput>,
     pub edges: Vec<CreateEdgeInput>,

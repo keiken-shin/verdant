@@ -1,4 +1,4 @@
-use rusqlite::{Connection, Result as SqliteResult, params};
+use rusqlite::{Connection, Result as SqliteResult};
 use std::sync::Mutex;
 
 pub struct Database {

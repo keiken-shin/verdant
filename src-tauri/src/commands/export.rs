@@ -30,6 +30,7 @@ pub struct ExportedGraph {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct ImportData {
     pub sessions: Option<Vec<ExportedSession>>,
     pub memories: Option<Vec<Memory>>,
@@ -88,9 +89,9 @@ pub fn export_session_markdown(session_id: String, db: State<Database>) -> Resul
         md.push_str(&format!("*Model: {}*\n\n---\n\n", m));
     }
 
-    struct Msg { role: String, content: String, created_at: String }
+    struct Msg { role: String, content: String }
     let messages: Vec<Msg> = stmt.query_map(params![session_id], |row| {
-        Ok(Msg { role: row.get(0)?, content: row.get(1)?, created_at: row.get(2)? })
+        Ok(Msg { role: row.get(0)?, content: row.get(1)? })
     }).map_err(|e| e.to_string())?
     .collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
 
