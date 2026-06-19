@@ -57,3 +57,43 @@ export function autoLayoutNodes(
 
   return positions;
 }
+
+export interface ParsedMessage {
+  thinking: string | null;
+  content: string;
+  isThinking: boolean;
+}
+
+export function parseThinking(text: string): ParsedMessage {
+  if (typeof text !== 'string') {
+    return { thinking: null, content: text || '', isThinking: false };
+  }
+
+  const thinkStart = text.indexOf('<think>');
+  if (thinkStart === -1) {
+    return { thinking: null, content: text, isThinking: false };
+  }
+
+  const thinkEnd = text.indexOf('</think>');
+  const beforeThink = text.slice(0, thinkStart);
+
+  if (thinkEnd === -1) {
+    // We have <think> but no </think> yet.
+    const thinking = text.slice(thinkStart + 7);
+    return {
+      thinking,
+      content: beforeThink,
+      isThinking: true,
+    };
+  } else {
+    // We have both <think> and </think>.
+    const thinking = text.slice(thinkStart + 7, thinkEnd);
+    const afterThink = text.slice(thinkEnd + 8);
+    return {
+      thinking,
+      content: beforeThink + afterThink,
+      isThinking: false,
+    };
+  }
+}
+

@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Copy, RotateCcw, Edit2, Check, ChevronDown, ChevronUp } from 'lucide-react';
-import { cn } from '@/utils';
+import { Copy, RotateCcw, Edit2, Check, ChevronDown, ChevronUp, Brain } from 'lucide-react';
+import { cn, parseThinking } from '@/utils';
 import type { Message } from '@/types';
 
 interface UserMessageProps {
@@ -12,7 +12,9 @@ interface UserMessageProps {
 
 export function UserMessage({ message, onEdit }: UserMessageProps) {
   const [editing, setEditing] = useState(false);
-  const [editValue, setEditValue] = useState(message.content);
+  const [editValue, setEditValue] = useState(message?.content || '');
+
+  if (!message) return null;
 
   const handleSave = () => {
     if (onEdit && editValue.trim()) {
@@ -77,9 +79,14 @@ interface AssistantMessageProps {
 
 export function AssistantMessage({ message, onCopy, onRegenerate, isLast }: AssistantMessageProps) {
   const [copied, setCopied] = useState(false);
+  const [thinkingExpanded, setThinkingExpanded] = useState(false);
+
+  if (!message) return null;
+
+  const { thinking, content: mainContent } = parseThinking(message.content);
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(message.content);
+    await navigator.clipboard.writeText(mainContent);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
     onCopy?.();
@@ -87,6 +94,28 @@ export function AssistantMessage({ message, onCopy, onRegenerate, isLast }: Assi
 
   return (
     <div className="mb-6 group">
+      {thinking && (
+        <div className="mb-3 border-l-2 border-[var(--color-verdant-primary)] bg-[var(--color-verdant-sidebar-bg)]/40 pl-4 py-2 pr-3 rounded-r-lg max-w-none">
+          <button
+            onClick={() => setThinkingExpanded(!thinkingExpanded)}
+            className="flex items-center gap-2 text-xs font-semibold text-zinc-500 hover:text-zinc-800 transition-colors select-none w-full text-left"
+          >
+            <Brain className="h-3.5 w-3.5 text-[var(--color-verdant-primary)]" />
+            <span>Thought Process</span>
+            {thinkingExpanded ? (
+              <ChevronUp className="h-3.5 w-3.5 text-zinc-400 ml-auto" />
+            ) : (
+              <ChevronDown className="h-3.5 w-3.5 text-zinc-400 ml-auto" />
+            )}
+          </button>
+          {thinkingExpanded && (
+            <div className="mt-2 text-xs text-zinc-500 border-t border-zinc-200/50 pt-2 leading-relaxed font-mono whitespace-pre-wrap">
+              {thinking}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="prose prose-sm max-w-none text-zinc-700">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
@@ -135,7 +164,7 @@ export function AssistantMessage({ message, onCopy, onRegenerate, isLast }: Assi
             td: ({ children }) => <td className="px-3 py-2 border border-zinc-200">{children}</td>,
           }}
         >
-          {message.content}
+          {mainContent}
         </ReactMarkdown>
       </div>
 
@@ -169,18 +198,56 @@ interface StreamingMessageProps {
 }
 
 export function StreamingMessage({ content }: StreamingMessageProps) {
+  const { thinking, content: mainContent, isThinking } = parseThinking(content);
+  const [thinkingExpanded, setThinkingExpanded] = useState(true);
+
+  // Auto-expand thinking when thinking starts or continues
+  useEffect(() => {
+    if (isThinking) {
+      setThinkingExpanded(true);
+    }
+  }, [isThinking]);
+
   return (
     <div className="mb-6">
+      {thinking && (
+        <div className="mb-3 border-l-2 border-[var(--color-verdant-primary)] bg-[var(--color-verdant-sidebar-bg)]/40 pl-4 py-2 pr-3 rounded-r-lg max-w-none">
+          <button
+            onClick={() => setThinkingExpanded(!thinkingExpanded)}
+            className="flex items-center gap-2 text-xs font-semibold text-zinc-500 hover:text-zinc-800 transition-colors select-none w-full text-left"
+          >
+            <Brain className={cn("h-3.5 w-3.5 text-[var(--color-verdant-primary)]", isThinking && "animate-pulse")} />
+            <span>{isThinking ? 'Thinking...' : 'Thought Process'}</span>
+            {thinkingExpanded ? (
+              <ChevronUp className="h-3.5 w-3.5 text-zinc-400 ml-auto" />
+            ) : (
+              <ChevronDown className="h-3.5 w-3.5 text-zinc-400 ml-auto" />
+            )}
+          </button>
+          {thinkingExpanded && (
+            <div className="mt-2 text-xs text-zinc-500 border-t border-zinc-200/50 pt-2 leading-relaxed font-mono whitespace-pre-wrap">
+              {thinking}
+              {isThinking && (
+                <span className="inline-block h-3 w-1.5 ml-1 bg-zinc-400 animate-pulse" />
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="prose prose-sm max-w-none text-zinc-700">
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-          {content}
-        </ReactMarkdown>
-        {!content && (
-          <div className="flex gap-1 items-center h-5">
-            <div className="h-1.5 w-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-            <div className="h-1.5 w-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-            <div className="h-1.5 w-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: '300ms' }} />
-          </div>
+        {mainContent ? (
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {mainContent}
+          </ReactMarkdown>
+        ) : (
+          !isThinking && (
+            <div className="flex gap-1 items-center h-5">
+              <div className="h-1.5 w-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+              <div className="h-1.5 w-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+              <div className="h-1.5 w-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
+          )
         )}
       </div>
     </div>

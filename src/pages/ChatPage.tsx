@@ -48,6 +48,8 @@ function ChatWelcome({ onSuggestion }: { onSuggestion: (text: string) => void })
   );
 }
 
+const EMPTY_MESSAGES: any[] = [];
+
 export function ChatPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
@@ -57,13 +59,12 @@ export function ChatPage() {
   const { providers, models: providerModels, activeModelId, setActiveModel, isConnected, setIsConnected } = useProviderStore();
   const { settings } = useSettingsStore();
 
-
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const currentSession = sessions.find((s) => s.id === sessionId);
-  const messages = sessionId ? (messagesBySession[sessionId] || []) : [];
+  const messages = sessionId ? (messagesBySession[sessionId] || EMPTY_MESSAGES) : EMPTY_MESSAGES;
 
   // Load messages when session changes
   useEffect(() => {

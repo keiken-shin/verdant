@@ -27,6 +27,8 @@ const nodeTypes = {
   knowledgeNode: KnowledgeGraphNode,
 };
 
+const EMPTY_MESSAGES: any[] = [];
+
 export function KnowledgeGraphPanel() {
   const { nodes: storeNodes, edges: storeEdges, fetchGraph, addNode, addEdge } = useGraphStore();
   const { closeSearch, graphPanelOpen, toggleGraphPanel } = useUiStore();
@@ -41,7 +43,7 @@ export function KnowledgeGraphPanel() {
 
   const match = location.pathname.match(/\/chat\/([^/]+)/);
   const sessionId = match ? match[1] : undefined;
-  const sessionMessages = sessionId ? (messagesBySession[sessionId] || []) : [];
+  const sessionMessages = sessionId ? (messagesBySession[sessionId] || EMPTY_MESSAGES) : EMPTY_MESSAGES;
 
   const [width, setWidth] = useState(288); // Default w-72 = 288px
   const [logoHovered, setLogoHovered] = useState(false);

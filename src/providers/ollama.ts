@@ -109,9 +109,17 @@ export class OllamaProvider implements LLMProvider {
       throw new Error(`Chat failed: HTTP ${response.status}`);
     }
 
-    const data = await response.json() as OllamaChatResponse;
+    const data = await response.json() as OllamaChatResponse & { message: { reasoning_content?: string, thinking?: string } };
+    
+    let finalContent = "";
+    const thinkingText = data.message?.reasoning_content || data.message?.thinking;
+    if (thinkingText) {
+      finalContent += `<think>\n${thinkingText}\n</think>\n\n`;
+    }
+    finalContent += data.message.content;
+
     return {
-      content: data.message.content,
+      content: finalContent,
       model: data.model,
       done: data.done,
     };
@@ -142,6 +150,8 @@ export class OllamaProvider implements LLMProvider {
 
     const decoder = new TextDecoder();
     let buffer = '';
+    let isThinking = false;
+    let thinkingEnded = false;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -154,12 +164,38 @@ export class OllamaProvider implements LLMProvider {
       for (const line of lines) {
         if (!line.trim()) continue;
         try {
-          const chunk = JSON.parse(line) as OllamaChatResponse;
+          const chunk = JSON.parse(line) as OllamaChatResponse & { message: { reasoning_content?: string, thinking?: string } };
+          
+          let chunkText = "";
+          const thinkingText = chunk.message?.reasoning_content || chunk.message?.thinking;
+          
+          if (thinkingText) {
+             if (!isThinking) {
+                isThinking = true;
+                chunkText += "<think>\n";
+             }
+             chunkText += thinkingText;
+          }
+          
+          if (chunk.message?.content) {
+             if (isThinking && !thinkingEnded) {
+                thinkingEnded = true;
+                chunkText += "\n</think>\n\n";
+             }
+             chunkText += chunk.message.content;
+          }
+
           onChunk({
-            content: chunk.message?.content || '',
+            content: chunkText,
             done: chunk.done,
           });
-          if (chunk.done) return;
+          if (chunk.done) {
+             // ensure we close the tag if it ended abruptly
+             if (isThinking && !thinkingEnded) {
+               onChunk({ content: "\n</think>\n", done: true });
+             }
+             return;
+          }
         } catch {
           // Skip malformed JSON lines
         }

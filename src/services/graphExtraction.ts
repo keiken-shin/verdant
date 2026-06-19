@@ -1,4 +1,5 @@
 import type { ChatMessage, LLMProvider, NodeCategory } from '@/types';
+import { parseThinking } from '@/utils';
 
 export interface ExtractedNode {
   label: string;
@@ -50,7 +51,10 @@ export async function extractGraphFromConversation(
 ): Promise<ExtractionResult> {
   const conversationText = messages
     .filter((m) => m.role !== 'system')
-    .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+    .map((m) => {
+      const content = m.role === 'assistant' ? parseThinking(m.content).content : m.content;
+      return `${m.role === 'user' ? 'User' : 'Assistant'}: ${content}`;
+    })
     .join('\n\n');
 
   const extractionMessages: ChatMessage[] = [
