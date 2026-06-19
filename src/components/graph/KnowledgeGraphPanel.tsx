@@ -187,7 +187,7 @@ export function KnowledgeGraphPanel() {
   }, [displayEdges]);
 
   return (
-    <div className="w-72 shrink-0 border-l border-zinc-100 flex flex-col bg-[var(--color-wollama-bg)]">
+    <div className="w-72 shrink-0 border-l border-zinc-100 flex flex-col bg-[var(--color-verdant-bg)]">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100">
         <div className="flex items-center gap-2">

@@ -1,21 +1,21 @@
 @import "tailwindcss";
 
-/* ─── Wollama Design Tokens ──────────────────────────────────────────────── */
+/* ─── Verdant Design Tokens ──────────────────────────────────────────────── */
 @theme {
-  /* Colors — from crawl.json */
-  --color-wollama-primary:    #5A67D8;
-  --color-wollama-secondary:  #9BA3E6;
-  --color-wollama-accent:     #000000;
-  --color-wollama-bg:         #FDFDFB;
-  --color-wollama-text:       #52525B;
-  --color-wollama-link:       #BCC1ED;
-  --color-wollama-muted:      #A1A1AA;
-  --color-wollama-border:     #E4E4E7;
-  --color-wollama-sidebar-bg: #F4F4F2;
-  --color-wollama-hover:      #EDEDEB;
-  --color-wollama-active:     #E8E8E6;
-  --color-wollama-input-bg:   #FFFFFF;
-  --color-wollama-surface:    #FFFFFF;
+  /* Colors — Custom Sage Green Palette */
+  --color-verdant-primary:    #738C64;
+  --color-verdant-secondary:  #99B085;
+  --color-verdant-accent:     #1B2614;
+  --color-verdant-bg:         #FAFBFA;
+  --color-verdant-text:       #4E544A;
+  --color-verdant-link:       #A9BFAO;
+  --color-verdant-muted:      #8B9487;
+  --color-verdant-border:     #E0E6DD;
+  --color-verdant-sidebar-bg: #F0F3EF;
+  --color-verdant-hover:      #E2E7DF;
+  --color-verdant-active:     #D5DBD1;
+  --color-verdant-input-bg:   #FFFFFF;
+  --color-verdant-surface:    #FFFFFF;
 
   /* Typography */
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -46,8 +46,8 @@ html {
 body {
   margin: 0;
   font-family: var(--font-sans);
-  background-color: var(--color-wollama-bg);
-  color: var(--color-wollama-text);
+  background-color: var(--color-verdant-bg);
+  color: var(--color-verdant-text);
   line-height: 1.6;
   overflow: hidden;
 }
@@ -61,46 +61,46 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-wollama-border);
+  background: var(--color-verdant-border);
   border-radius: var(--radius-full);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-wollama-muted);
+  background: var(--color-verdant-muted);
 }
 
 /* ─── Selection ───────────────────────────────────────────────────────────── */
 ::selection {
-  background-color: var(--color-wollama-link);
-  color: var(--color-wollama-accent);
+  background-color: var(--color-verdant-link);
+  color: var(--color-verdant-accent);
 }
 
 /* ─── Focus Ring ──────────────────────────────────────────────────────────── */
 :focus-visible:not(input):not(textarea) {
-  outline: 2px solid var(--color-wollama-primary);
+  outline: 2px solid var(--color-verdant-primary);
   outline-offset: 2px;
 }
 
 /* ─── React Flow Overrides ────────────────────────────────────────────────── */
 .react-flow__background {
-  background-color: var(--color-wollama-bg);
+  background-color: var(--color-verdant-bg);
 }
 
 .react-flow__edge-path {
-  stroke: var(--color-wollama-secondary);
+  stroke: var(--color-verdant-secondary);
   stroke-width: 1.5;
 }
 
 .react-flow__controls {
   box-shadow: none;
-  border: 1px solid var(--color-wollama-border);
+  border: 1px solid var(--color-verdant-border);
   border-radius: var(--radius-md);
   overflow: hidden;
 }
 
 .react-flow__controls-button {
-  background: var(--color-wollama-surface);
+  background: var(--color-verdant-surface);
   border: none;
-  border-bottom: 1px solid var(--color-wollama-border);
+  border-bottom: 1px solid var(--color-verdant-border);
 }
 
 .react-flow__controls-button:last-child {
@@ -108,11 +108,11 @@ body {
 }
 
 .react-flow__controls-button:hover {
-  background: var(--color-wollama-hover);
+  background: var(--color-verdant-hover);
 }
 
 .react-flow__controls-button svg {
-  fill: var(--color-wollama-text);
+  fill: var(--color-verdant-text);
 }
 
 /* ─── Utility Classes ─────────────────────────────────────────────────────── */
@@ -126,7 +126,7 @@ body {
   font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--color-wollama-muted);
+  color: var(--color-verdant-muted);
 }
 
 /* Page title — 46px as per design tokens */
@@ -134,7 +134,7 @@ body {
   font-size: 46px;
   font-weight: 700;
   line-height: 1.1;
-  color: var(--color-wollama-accent);
+  color: var(--color-verdant-accent);
   letter-spacing: -0.02em;
 }
 

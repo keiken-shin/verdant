@@ -15,7 +15,7 @@ export function AppShell() {
   const showPanel = graphPanelOpen && isChatRoute;
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[var(--color-wollama-bg)]">
+    <div className="flex h-screen w-screen overflow-hidden bg-[var(--color-verdant-bg)]">
       {/* Left: Sidebar */}
       <Sidebar />
 

@@ -14,7 +14,7 @@ pub fn run() {
         .setup(|app| {
             let app_dir = app.path().app_data_dir().expect("Failed to get app data dir");
             std::fs::create_dir_all(&app_dir).expect("Failed to create app data dir");
-            let db_path = app_dir.join("wollama.db");
+            let db_path = app_dir.join("verdant.db");
             let db = Database::new(db_path.to_str().unwrap()).expect("Failed to initialize database");
             app.manage(db);
             Ok(())

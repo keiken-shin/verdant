@@ -30,7 +30,7 @@ export function PageHeader({ label, title, description, className, actions }: Pa
         <div>
           <h1 className="page-title mb-3">{title}</h1>
           {description && (
-            <p className="text-base text-[var(--color-wollama-text)] max-w-lg leading-relaxed">
+            <p className="text-base text-[var(--color-verdant-text)] max-w-lg leading-relaxed">
               {description}
             </p>
           )}

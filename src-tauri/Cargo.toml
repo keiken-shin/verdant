@@ -1,12 +1,12 @@
 [package]
-name = "wollama"
+name = "verdant"
 version = "0.1.0"
-description = "Wollama — A local-first AI workspace"
-authors = ["Wollama"]
+description = "Verdant — A local-first AI workspace"
+authors = ["Verdant"]
 edition = "2021"
 
 [lib]
-name = "wollama_lib"
+name = "verdant_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

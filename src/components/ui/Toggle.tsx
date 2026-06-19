@@ -18,8 +18,8 @@ export function Toggle({ checked, onCheckedChange, id, disabled }: ToggleProps) 
       className={cn(
         'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent',
         'transition-colors duration-200 ease-in-out focus-visible:outline-none',
-        'focus-visible:ring-2 focus-visible:ring-[var(--color-wollama-primary)] focus-visible:ring-offset-2',
-        checked ? 'bg-[var(--color-wollama-primary)]' : 'bg-zinc-200',
+        'focus-visible:ring-2 focus-visible:ring-[var(--color-verdant-primary)] focus-visible:ring-offset-2',
+        checked ? 'bg-[var(--color-verdant-primary)]' : 'bg-zinc-200',
         disabled && 'cursor-not-allowed opacity-50'
       )}
     >

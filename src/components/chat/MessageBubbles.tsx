@@ -123,7 +123,7 @@ export function AssistantMessage({ message, onCopy, onRegenerate, isLast }: Assi
               <blockquote className="border-l-2 border-zinc-200 pl-4 my-3 text-zinc-500 italic">{children}</blockquote>
             ),
             a: ({ href, children }) => (
-              <a href={href} className="text-[var(--color-wollama-primary)] underline underline-offset-2 hover:opacity-80" target="_blank" rel="noreferrer">{children}</a>
+              <a href={href} className="text-[var(--color-verdant-primary)] underline underline-offset-2 hover:opacity-80" target="_blank" rel="noreferrer">{children}</a>
             ),
             hr: () => <hr className="border-zinc-100 my-4" />,
             table: ({ children }) => (

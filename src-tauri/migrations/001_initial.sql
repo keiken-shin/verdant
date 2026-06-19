@@ -1,4 +1,4 @@
--- Wollama Initial Schema Migration v1
+-- Verdant Initial Schema Migration v1
 -- All data stored locally in SQLite
 
 -- Provider configurations

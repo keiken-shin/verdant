@@ -33,7 +33,7 @@ export function ModelSelector({ models, selectedModelId, onSelect, loading }: Mo
         onClick={() => setOpen((v) => !v)}
         className={cn(
           'flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium',
-          'text-[var(--color-wollama-primary)] hover:bg-[var(--color-wollama-hover)] transition-colors',
+          'text-[var(--color-verdant-primary)] hover:bg-[var(--color-verdant-hover)] transition-colors',
           loading && 'opacity-50 pointer-events-none'
         )}
         disabled={loading}
@@ -58,7 +58,7 @@ export function ModelSelector({ models, selectedModelId, onSelect, loading }: Mo
                 }}
                 className={cn(
                   'w-full text-left px-3 py-2 text-xs hover:bg-zinc-50 transition-colors',
-                  model.id === selectedModelId && 'text-[var(--color-wollama-primary)] font-medium bg-zinc-50'
+                  model.id === selectedModelId && 'text-[var(--color-verdant-primary)] font-medium bg-zinc-50'
                 )}
               >
                 <div className="font-mono font-medium">{model.name}</div>
