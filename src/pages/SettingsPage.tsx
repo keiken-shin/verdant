@@ -4,6 +4,7 @@ import { Toggle } from '@/components/ui/Toggle';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useProviderStore } from '@/stores/providerStore';
 import { providerRegistry } from '@/providers/registry';
+import type { ModelInfo } from '@/types';
 import { cn } from '@/utils';
 
 interface SettingSectionProps {
@@ -26,19 +27,20 @@ interface ToggleSettingProps {
   checked: boolean;
   onChange: (v: boolean) => void;
   id: string;
+  disabled?: boolean;
 }
 
-function ToggleSetting({ title, description, checked, onChange, id }: ToggleSettingProps) {
+function ToggleSetting({ title, description, checked, onChange, id, disabled }: ToggleSettingProps) {
   return (
     <div className="flex items-start justify-between py-2 border-b border-zinc-100 last:border-0">
-      <div className="flex-1 pr-8">
-        <label htmlFor={id} className="block text-sm font-medium text-zinc-800 mb-0.5 cursor-pointer">
+      <div className={cn("flex-1 pr-8", disabled && "opacity-50")}>
+        <label htmlFor={id} className={cn("block text-sm font-medium text-zinc-800 mb-0.5", disabled ? "cursor-default" : "cursor-pointer")}>
           {title}
         </label>
         <p className="text-sm text-zinc-500 leading-relaxed max-w-md">{description}</p>
       </div>
       <div className="shrink-0 mt-0.5">
-        <Toggle id={id} checked={checked} onCheckedChange={onChange} />
+        <Toggle id={id} checked={checked} onCheckedChange={onChange} disabled={disabled} />
       </div>
     </div>
   );
@@ -75,8 +77,40 @@ function InputSetting({ title, description, value, onChange, placeholder, id }: 
           onBlur={() => onChange(local)}
           onKeyDown={(e) => e.key === 'Enter' && onChange(local)}
           placeholder={placeholder}
-          className="px-3 py-1.5 text-sm font-mono border border-zinc-200 rounded-lg outline-none focus:border-[var(--color-wollama-primary)] transition-colors text-zinc-700 w-52"
+          className="px-3 py-1.5 text-sm font-mono border border-zinc-200 rounded-lg outline-none focus:border-[var(--color-verdant-primary)] transition-colors text-zinc-700 w-52"
         />
+      </div>
+    </div>
+  );
+}
+
+interface SelectSettingProps {
+  title: string;
+  description: string;
+  value: string;
+  onChange: (v: string) => void;
+  id: string;
+  children: React.ReactNode;
+}
+
+function SelectSetting({ title, description, value, onChange, id, children }: SelectSettingProps) {
+  return (
+    <div className="flex items-start justify-between py-2 border-b border-zinc-100 last:border-0">
+      <div className="flex-1 pr-8">
+        <label htmlFor={id} className="block text-sm font-medium text-zinc-800 mb-0.5">
+          {title}
+        </label>
+        <p className="text-sm text-zinc-500 leading-relaxed max-w-md">{description}</p>
+      </div>
+      <div className="shrink-0">
+        <select
+          id={id}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="px-3 py-1.5 text-sm border border-zinc-200 rounded-lg outline-none focus:border-[var(--color-verdant-primary)] transition-colors text-zinc-700 w-52 bg-white cursor-pointer"
+        >
+          {children}
+        </select>
       </div>
     </div>
   );
@@ -87,16 +121,18 @@ export function SettingsPage() {
   const { providers, setIsConnected } = useProviderStore();
   const [connectionStatus, setConnectionStatus] = useState<'unknown' | 'connected' | 'disconnected'>('unknown');
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [models, setModels] = useState<ModelInfo[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
 
   const testConnection = async () => {
     const defaultProvider = providers.find((p) => p.is_default) || providers[0];
     if (!defaultProvider) return;
     const provider = providerRegistry.createOllama(defaultProvider.id, settings.ollama_host);
-    
+
     // Explicitly clear error and status before fetching
     setConnectionStatus('unknown');
     setConnectionError(null);
-    
+
     const result = await provider.healthCheck();
     setConnectionStatus(result.connected ? 'connected' : 'disconnected');
     setIsConnected(result.connected);
@@ -110,12 +146,61 @@ export function SettingsPage() {
     if (providers.length > 0) testConnection();
   }, [providers, settings.ollama_host]);
 
+  useEffect(() => {
+    const loadModels = async () => {
+      const defaultProvider = providers.find((p) => p.is_default) || providers[0];
+      if (!defaultProvider) return;
+
+      const endpoint = settings.ollama_host || defaultProvider.endpoint;
+      const provider = providerRegistry.createOllama(defaultProvider.id, endpoint);
+
+      setModelsLoading(true);
+      try {
+        const health = await provider.healthCheck();
+        if (health.connected) {
+          const fetchedModels = await provider.listModels();
+          setModels(fetchedModels);
+        }
+      } catch (e) {
+        console.error('Failed to load models for settings:', e);
+      } finally {
+        setModelsLoading(false);
+      }
+    };
+
+    if (providers.length > 0) {
+      loadModels();
+    }
+  }, [providers, settings.ollama_host]);
+
+  // Group display models by provider
+  const displayModels = [...models];
+  if (settings.extraction_model && !models.some((m) => m.id === settings.extraction_model)) {
+    displayModels.push({
+      id: settings.extraction_model,
+      name: settings.extraction_model,
+      displayName: settings.extraction_model,
+      provider: 'Ollama',
+      providerId: 'custom',
+      isLocal: true,
+    });
+  }
+
+  const groupedModels = displayModels.reduce<Record<string, ModelInfo[]>>((acc, model) => {
+    const provider = model.provider || 'Ollama';
+    if (!acc[provider]) {
+      acc[provider] = [];
+    }
+    acc[provider].push(model);
+    return acc;
+  }, {});
+
   return (
     <div className="px-12 py-12 max-w-3xl">
       <PageHeader
         label="PREFERENCES"
         title="Settings"
-        description="Wollama runs on your machine. The only things that leave it are the ones you choose to send."
+        description="Verdant runs on your machine. The only things that leave it are the ones you choose to send."
       />
 
       {/* Privacy Section */}
@@ -126,11 +211,12 @@ export function SettingsPage() {
           description="Off by default. We don't read your conversations — we just count whether the app crashed."
           checked={settings.anonymous_telemetry}
           onChange={(v) => updateSetting('anonymous_telemetry', v)}
+          disabled={true}
         />
         <ToggleSetting
           id="setting-auto-remember"
           title="Auto-remember"
-          description="Let Wollama keep small notes about your preferences and ongoing work. You can review and forget them at any time."
+          description="Let Verdant keep small notes about your preferences and ongoing work. You can review and forget them at any time."
           checked={settings.auto_remember}
           onChange={(v) => updateSetting('auto_remember', v)}
         />
@@ -164,7 +250,7 @@ export function SettingsPage() {
               <label htmlFor="setting-ollama-host" className="block text-sm font-medium text-zinc-800 mb-0.5">
                 Ollama host
               </label>
-              <p className="text-sm text-zinc-500">Where Wollama talks to your local model runner.</p>
+              <p className="text-sm text-zinc-500">Where Verdant talks to your local model runner.</p>
             </div>
             <div className="shrink-0">
               <input
@@ -172,7 +258,7 @@ export function SettingsPage() {
                 type="text"
                 value={settings.ollama_host}
                 onChange={(e) => updateSetting('ollama_host', e.target.value)}
-                className="px-3 py-1.5 text-sm font-mono border border-zinc-200 rounded-lg outline-none focus:border-[var(--color-wollama-primary)] transition-colors text-zinc-700 w-52"
+                className="px-3 py-1.5 text-sm font-mono border border-zinc-200 rounded-lg outline-none focus:border-[var(--color-verdant-primary)] transition-colors text-zinc-700 w-52"
               />
             </div>
           </div>
@@ -203,14 +289,24 @@ export function SettingsPage() {
           )}
         </div>
 
-        <InputSetting
+        <SelectSetting
           id="setting-extraction-model"
           title="Graph extraction model"
-          description="Lightweight model used to extract knowledge graph nodes from conversations. Leave blank to use the active model."
+          description="Lightweight model used to extract knowledge graph nodes from conversations. Choose 'Use active model' to use the active chat model."
           value={settings.extraction_model}
           onChange={(v) => updateSetting('extraction_model', v)}
-          placeholder="e.g. gemma2:2b"
-        />
+        >
+          <option value="">Use active model</option>
+          {Object.entries(groupedModels).map(([providerName, providerModels]) => (
+            <optgroup key={providerName} label={providerName}>
+              {providerModels.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name} {m.size ? `(${m.size})` : ''}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </SelectSetting>
       </SettingSection>
 
       {/* Quote */}
