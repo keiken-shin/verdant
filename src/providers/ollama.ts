@@ -1,4 +1,5 @@
 import { fetch } from '@tauri-apps/plugin-http';
+import { useSettingsStore } from '@/stores/settingsStore';
 import type {
   LLMProvider,
   ModelInfo,
@@ -102,6 +103,7 @@ export class OllamaProvider implements LLMProvider {
         model: request.model,
         messages: request.messages,
         stream: false,
+        options: { num_ctx: useSettingsStore.getState().settings.ollama_num_ctx || 32768 },
       }),
     });
 
@@ -137,6 +139,7 @@ export class OllamaProvider implements LLMProvider {
         model: request.model,
         messages: request.messages,
         stream: true,
+        options: { num_ctx: useSettingsStore.getState().settings.ollama_num_ctx || 32768 },
       }),
       signal,
     });

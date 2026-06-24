@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Edit2, Trash2, Check, X } from 'lucide-react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { Edit2, Trash2, Check, X, FolderKanban } from 'lucide-react';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { UserMessage, AssistantMessage, StreamingMessage } from '@/components/chat/MessageBubbles';
 import { SectionLabel } from '@/components/ui/PageHeader';
@@ -8,9 +8,11 @@ import { useSessionStore } from '@/stores/sessionStore';
 import { useMessageStore } from '@/stores/messageStore';
 import { useProviderStore } from '@/stores/providerStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useProjectStore } from '@/stores/projectStore';
+import { buildProjectContext } from '@/services/sessionContext';
+import { useModels } from '@/hooks/useModels';
 
 import { providerRegistry } from '@/providers/registry';
-import type { ModelInfo } from '@/types';
 
 const PROMPT_SUGGESTIONS = [
   "Explain pattern languages in your own words.",
@@ -53,17 +55,22 @@ const EMPTY_MESSAGES: any[] = [];
 export function ChatPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const { sessions, createSession, updateSession, deleteSession } = useSessionStore();
   const { messagesBySession, streamingContent, isStreaming, fetchMessages, addMessage, setIsStreaming, setStreamingContent, appendStreamingContent, setAbortController, stopStreaming } = useMessageStore();
-  const { providers, models: providerModels, activeModelId, setActiveModel, isConnected, setIsConnected } = useProviderStore();
+  const { providers, activeModelId, setActiveModel } = useProviderStore();
   const { settings } = useSettingsStore();
+  const { projects, filesByProject, fetchProjectFiles } = useProjectStore();
+  const { models, modelsLoading } = useModels();
 
-  const [models, setModels] = useState<ModelInfo[]>([]);
-  const [modelsLoading, setModelsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const sentInitialRef = useRef<string | null>(null);
 
   const currentSession = sessions.find((s) => s.id === sessionId);
+  const project = currentSession?.project_id
+    ? projects.find((p) => p.id === currentSession.project_id)
+    : undefined;
   const messages = sessionId ? (messagesBySession[sessionId] || EMPTY_MESSAGES) : EMPTY_MESSAGES;
 
   // Load messages when session changes
@@ -72,37 +79,6 @@ export function ChatPage() {
       fetchMessages(sessionId);
     }
   }, [sessionId, fetchMessages, messagesBySession]);
-
-  // Fetch models from Ollama
-  useEffect(() => {
-    const loadModels = async () => {
-      const defaultProvider = providers.find((p) => p.is_default) || providers[0];
-      if (!defaultProvider) return;
-
-      // Update provider endpoint from settings
-      const ollamaEndpoint = settings.ollama_host || defaultProvider.endpoint;
-      const provider = providerRegistry.createOllama(defaultProvider.id, ollamaEndpoint);
-
-      setModelsLoading(true);
-      try {
-        const health = await provider.healthCheck();
-        setIsConnected(health.connected);
-        if (health.connected) {
-          const fetchedModels = await provider.listModels();
-          setModels(fetchedModels);
-          if (!activeModelId && fetchedModels.length > 0) {
-            setActiveModel(fetchedModels[0].id);
-          }
-        }
-      } catch (e) {
-        setIsConnected(false);
-      } finally {
-        setModelsLoading(false);
-      }
-    };
-
-    if (providers.length > 0) loadModels();
-  }, [providers, settings.ollama_host]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -146,6 +122,29 @@ export function ChatPage() {
     const ollamaEndpoint = settings.ollama_host || defaultProvider.endpoint;
     const provider = providerRegistry.createOllama(defaultProvider.id, ollamaEndpoint);
 
+    // Project context: prepend a system message with project instructions,
+    // knowledge base, and summaries of sibling sessions (only for project chats).
+    const sessionProjectId = useSessionStore.getState().sessions.find((s) => s.id === sid)?.project_id;
+    if (sessionProjectId) {
+      const proj = useProjectStore.getState().projects.find((p) => p.id === sessionProjectId);
+      if (proj) {
+        try {
+          await fetchProjectFiles(sessionProjectId);
+          const files = useProjectStore.getState().filesByProject[sessionProjectId] || [];
+          const systemMsg = await buildProjectContext({
+            project: proj,
+            files,
+            currentSessionId: sid,
+            provider,
+            modelId: settings.extraction_model || activeModelId,
+          });
+          if (systemMsg) history.unshift({ role: 'system', content: systemMsg });
+        } catch (e) {
+          console.error('Failed to build project context:', e);
+        }
+      }
+    }
+
     const abortCtrl = new AbortController();
     setAbortController(abortCtrl);
     setIsStreaming(true);
@@ -175,7 +174,20 @@ export function ChatPage() {
       setStreamingContent('');
       setAbortController(null);
     }
-  }, [activeModelId, sessionId, providers, settings.ollama_host, createSession, updateSession, addMessage, setAbortController, setIsStreaming, setStreamingContent, appendStreamingContent, navigate]);
+  }, [activeModelId, sessionId, providers, settings.ollama_host, settings.extraction_model, createSession, updateSession, addMessage, fetchProjectFiles, setAbortController, setIsStreaming, setStreamingContent, appendStreamingContent, navigate]);
+
+  // Auto-send an initial prompt passed from the project workspace (one-shot).
+  // Gated on activeModelId: on a cold start models may still be loading, and
+  // handleSend early-returns without one. handleSend's identity changes when
+  // activeModelId is set, so this effect re-fires and sends once a model exists.
+  useEffect(() => {
+    const initialPrompt = (location.state as { initialPrompt?: string } | null)?.initialPrompt;
+    if (sessionId && initialPrompt && activeModelId && sentInitialRef.current !== sessionId) {
+      sentInitialRef.current = sessionId;
+      navigate(location.pathname, { replace: true, state: {} }); // clear so it doesn't re-fire
+      handleSend(initialPrompt);
+    }
+  }, [sessionId, location.state, location.pathname, activeModelId, navigate, handleSend]);
 
   const handleRegenerate = useCallback(async () => {
     if (!sessionId || messages.length < 2) return;
@@ -229,6 +241,19 @@ export function ChatPage() {
       {/* Header */}
       <div className="flex items-center justify-between px-8 py-4 border-b border-zinc-100">
         <div className="flex items-center gap-2 text-sm text-zinc-500">
+          {project && (
+            <>
+              <button
+                onClick={() => navigate(`/projects/${project.id}`)}
+                className="flex items-center gap-1 text-zinc-500 hover:text-zinc-800 transition-colors"
+                title="Open project workspace"
+              >
+                <FolderKanban className="h-3.5 w-3.5" />
+                <span className="font-medium">{project.name}</span>
+              </button>
+              <span className="text-zinc-300">/</span>
+            </>
+          )}
           {isEditingTitle ? (
             <div className="flex items-center gap-1">
               <input

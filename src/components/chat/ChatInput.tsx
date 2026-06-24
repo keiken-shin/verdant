@@ -14,6 +14,7 @@ interface ChatInputProps {
   modelsLoading?: boolean;
   disabled?: boolean;
   placeholder?: string;
+  dropdownDirection?: 'up' | 'down';
 }
 
 export function ChatInput({
@@ -26,6 +27,7 @@ export function ChatInput({
   modelsLoading,
   disabled,
   placeholder = 'Ask, think aloud, or paste a passage...',
+  dropdownDirection = 'up',
 }: ChatInputProps) {
   const [value, setValue] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -89,6 +91,7 @@ export function ChatInput({
               selectedModelId={selectedModelId}
               onSelect={onModelChange}
               loading={modelsLoading}
+              direction={dropdownDirection}
             />
           </div>
 
