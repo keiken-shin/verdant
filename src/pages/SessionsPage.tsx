@@ -63,11 +63,6 @@ export function SessionsPage() {
                     <Badge tag={session.tag}>{session.tag}</Badge>
                   )}
                 </div>
-                {session.preview && (
-                  <p className="text-sm text-zinc-400 italic truncate">
-                    {session.preview}
-                  </p>
-                )}
               </div>
 
               {/* Meta */}
