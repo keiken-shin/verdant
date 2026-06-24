@@ -12,6 +12,7 @@ pub struct Message {
     pub model_id: Option<String>,
     pub created_at: String,
     pub sort_order: i64,
+    pub parent_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -20,13 +21,14 @@ pub struct CreateMessageInput {
     pub role: String,
     pub content: String,
     pub model_id: Option<String>,
+    pub parent_id: Option<String>,
 }
 
 #[tauri::command]
 pub fn get_messages(session_id: String, db: State<Database>) -> Result<Vec<Message>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn.prepare(
-        "SELECT id, session_id, role, content, model_id, created_at, sort_order
+        "SELECT id, session_id, role, content, model_id, created_at, sort_order, parent_id
          FROM messages WHERE session_id = ?1 ORDER BY sort_order ASC"
     ).map_err(|e| e.to_string())?;
 
@@ -39,6 +41,7 @@ pub fn get_messages(session_id: String, db: State<Database>) -> Result<Vec<Messa
             model_id: row.get(4)?,
             created_at: row.get(5)?,
             sort_order: row.get(6)?,
+            parent_id: row.get(7)?,
         })
     }).map_err(|e| e.to_string())?;
 
@@ -59,9 +62,9 @@ pub fn create_message(input: CreateMessageInput, db: State<Database>) -> Result<
     ).unwrap_or(0);
 
     conn.execute(
-        "INSERT INTO messages (id, session_id, role, content, model_id, created_at, sort_order)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        params![id, input.session_id, input.role, input.content, input.model_id, now, sort_order],
+        "INSERT INTO messages (id, session_id, role, content, model_id, created_at, sort_order, parent_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params![id, input.session_id, input.role, input.content, input.model_id, now, sort_order, input.parent_id],
     ).map_err(|e| e.to_string())?;
 
     // Update session preview and updated_at
@@ -81,6 +84,7 @@ pub fn create_message(input: CreateMessageInput, db: State<Database>) -> Result<
         model_id: input.model_id,
         created_at: now,
         sort_order,
+        parent_id: input.parent_id,
     })
 }
 

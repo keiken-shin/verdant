@@ -45,6 +45,7 @@ export interface Message {
   model_id?: string;
   created_at: string;
   sort_order: number;
+  parent_id?: string | null;
 }
 
 export interface Memory {

@@ -56,6 +56,14 @@ impl Database {
             )?;
         }
 
+        if version < 3 {
+            conn.execute_batch(include_str!("../migrations/003_message_parent.sql"))?;
+            conn.execute(
+                "INSERT INTO schema_version (version, applied_at) VALUES (3, datetime('now'))",
+                [],
+            )?;
+        }
+
         Ok(())
     }
 }
