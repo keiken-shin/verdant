@@ -1,4 +1,6 @@
 pub mod sessions;
+pub mod projects;
+pub mod project_files;
 pub mod messages;
 pub mod memories;
 pub mod graph;

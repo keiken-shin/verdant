@@ -48,6 +48,14 @@ impl Database {
             )?;
         }
 
+        if version < 2 {
+            conn.execute_batch(include_str!("../migrations/002_projects.sql"))?;
+            conn.execute(
+                "INSERT INTO schema_version (version, applied_at) VALUES (2, datetime('now'))",
+                [],
+            )?;
+        }
+
         Ok(())
     }
 }

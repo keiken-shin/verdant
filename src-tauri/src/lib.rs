@@ -22,11 +22,25 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             // Sessions
             commands::sessions::get_sessions,
+            commands::sessions::get_project_sessions,
             commands::sessions::get_session,
             commands::sessions::create_session,
             commands::sessions::update_session,
+            commands::sessions::set_session_summary,
             commands::sessions::delete_session,
             commands::sessions::search_sessions,
+            // Projects
+            commands::projects::get_projects,
+            commands::projects::get_project,
+            commands::projects::create_project,
+            commands::projects::update_project,
+            commands::projects::touch_project,
+            commands::projects::delete_project,
+            commands::projects::search_projects,
+            // Project files (knowledge base)
+            commands::project_files::get_project_files,
+            commands::project_files::create_project_file,
+            commands::project_files::delete_project_file,
             // Messages
             commands::messages::get_messages,
             commands::messages::create_message,
