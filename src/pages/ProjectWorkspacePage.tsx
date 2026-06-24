@@ -7,6 +7,7 @@ import { ProjectChatTab } from '@/components/project-workspace/ProjectChatTab';
 import { ProjectFilesTab } from '@/components/project-workspace/ProjectFilesTab';
 import { ProjectGraphTab } from '@/components/project-workspace/ProjectGraphTab';
 import { ProjectTimelineTab } from '@/components/project-workspace/ProjectTimelineTab';
+import { ProjectSettingsTab } from '@/components/project-workspace/ProjectSettingsTab';
 
 export function ProjectWorkspacePage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -61,6 +62,9 @@ export function ProjectWorkspacePage() {
         )}
         {tab === 'Timeline' && (
           <ProjectTimelineTab projectSessions={projectSessions} />
+        )}
+        {tab === 'Settings' && (
+          <ProjectSettingsTab project={project} />
         )}
       </div>
     </div>

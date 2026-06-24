@@ -10,6 +10,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   anonymous_telemetry: false,
   theme: 'paper-light',
   extraction_model: '',
+  default_persona_id: 'default-assistant',
 };
 
 interface SettingsStore {

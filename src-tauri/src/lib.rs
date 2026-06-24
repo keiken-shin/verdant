@@ -38,6 +38,11 @@ pub fn run() {
             commands::projects::touch_project,
             commands::projects::delete_project,
             commands::projects::search_projects,
+            // Personas
+            commands::personas::get_personas,
+            commands::personas::create_persona,
+            commands::personas::update_persona,
+            commands::personas::delete_persona,
             // Project files (knowledge base)
             commands::project_files::get_project_files,
             commands::project_files::create_project_file,
