@@ -8,8 +8,33 @@ export interface Session {
   provider_id?: string;
   is_pinned: boolean;
   preview?: string;
+  project_id?: string;
+  summary?: string;
+  summary_updated_at?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  description?: string;
+  instructions?: string;
+  color?: string;
+  is_pinned: boolean;
+  last_opened_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectFile {
+  id: string;
+  project_id: string;
+  name: string;
+  ext?: string;
+  size: number;
+  content_text: string;
+  created_at: string;
 }
 
 export interface Message {
@@ -41,6 +66,7 @@ export interface GraphNode {
   x: number;
   y: number;
   metadata: string;
+  project_id?: string;
   created_at: string;
   updated_at: string;
 }
@@ -51,6 +77,7 @@ export interface GraphEdge {
   target_id: string;
   label?: string;
   metadata: string;
+  project_id?: string;
   created_at: string;
 }
 
@@ -156,6 +183,7 @@ export interface LLMProvider {
 
 export interface AppSettings {
   ollama_host: string;
+  ollama_num_ctx: number;
   auto_remember: boolean;
   show_graph_panel: boolean;
   anonymous_telemetry: boolean;

@@ -7,11 +7,14 @@ import { MemoriesPage } from '@/pages/MemoriesPage';
 import { ModelsPage } from '@/pages/ModelsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { KnowledgeGraphPage } from '@/pages/KnowledgeGraphPage';
+import { ProjectsPage } from '@/pages/ProjectsPage';
+import { ProjectWorkspacePage } from '@/pages/ProjectWorkspacePage';
 import { useSessionStore } from '@/stores/sessionStore';
 import { useMemoryStore } from '@/stores/memoryStore';
 import { useGraphStore } from '@/stores/graphStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useProviderStore } from '@/stores/providerStore';
+import { useProjectStore } from '@/stores/projectStore';
 
 function App() {
   const { fetchSessions } = useSessionStore();
@@ -19,12 +22,14 @@ function App() {
   const { fetchGraph } = useGraphStore();
   const { fetchSettings } = useSettingsStore();
   const { fetchProviders } = useProviderStore();
+  const { fetchProjects } = useProjectStore();
 
   // Initialize all data on app start
   useEffect(() => {
     const init = async () => {
       await fetchSettings();
       await fetchProviders();
+      await fetchProjects();
       await fetchSessions();
       await fetchMemories();
       await fetchGraph();
@@ -36,7 +41,9 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route element={<AppShell />}>
-          <Route index element={<ChatPage />} />
+          <Route index element={<ProjectsPage />} />
+          <Route path="/projects" element={<ProjectsPage />} />
+          <Route path="/projects/:projectId" element={<ProjectWorkspacePage />} />
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/chat/:sessionId" element={<ChatPage />} />
           <Route path="/sessions" element={<SessionsPage />} />

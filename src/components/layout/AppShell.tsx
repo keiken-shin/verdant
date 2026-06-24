@@ -10,9 +10,8 @@ export function AppShell() {
   const { graphPanelOpen } = useUiStore();
   const location = useLocation();
 
-  // Only show the graph panel when on a chat route
-  const isChatRoute = location.pathname === '/' || location.pathname.startsWith('/chat');
-  const showPanel = isChatRoute;
+  // Only show the graph panel when on a chat route (the workspace has its own graph tab)
+  const showPanel = location.pathname.startsWith('/chat');
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[var(--color-verdant-bg)]">
