@@ -4,6 +4,7 @@ import { ChevronRight, MessageSquare, Trash2, Pin } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Badge } from '@/components/ui/Badge';
 import { useSessionStore } from '@/stores/sessionStore';
+import { useConfirmStore } from '@/stores/confirmStore';
 import { formatRelativeTime, cn } from '@/utils';
 import type { Session } from '@/types';
 
@@ -20,7 +21,14 @@ export function SessionsPage() {
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    await deleteSession(id);
+    const yes = await useConfirmStore.getState().confirm({
+      title: 'Delete Session',
+      message: 'Are you sure you want to delete this session? This action cannot be undone.',
+      kind: 'warning',
+    });
+    if (yes) {
+      await deleteSession(id);
+    }
   };
 
   const handlePin = async (e: React.MouseEvent, session: Session) => {
