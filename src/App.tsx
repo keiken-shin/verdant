@@ -5,7 +5,6 @@ import { ChatPage } from '@/pages/ChatPage';
 import { SessionsPage } from '@/pages/SessionsPage';
 import { MemoriesPage } from '@/pages/MemoriesPage';
 import { ModelsPage } from '@/pages/ModelsPage';
-import { SettingsPage } from '@/pages/SettingsPage';
 import { KnowledgeGraphPage } from '@/pages/KnowledgeGraphPage';
 import { ProjectsPage } from '@/pages/ProjectsPage';
 import { ProjectWorkspacePage } from '@/pages/ProjectWorkspacePage';
@@ -50,7 +49,6 @@ function App() {
           <Route path="/sessions" element={<SessionsPage />} />
           <Route path="/memories" element={<MemoriesPage />} />
           <Route path="/models" element={<ModelsPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
           <Route path="/knowledge-graph" element={<KnowledgeGraphPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { SearchModal } from '@/components/ui/SearchModal';
 import { KnowledgeGraphPanel } from '@/components/graph/KnowledgeGraphPanel';
+import { SettingsModal } from '@/components/settings/SettingsModal';
 import { useUiStore } from '@/stores/uiStore';
 import { useLocation } from 'react-router-dom';
 
@@ -32,6 +33,9 @@ export function AppShell() {
 
       {/* Global: Search Modal */}
       <SearchModal />
+      
+      {/* Global: Settings Modal */}
+      <SettingsModal />
     </div>
   );
 }

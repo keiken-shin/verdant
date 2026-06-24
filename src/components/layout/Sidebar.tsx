@@ -106,7 +106,7 @@ function VerdantLogo() {
 export function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { openSearch, toggleSidebar, sidebarCollapsed } = useUiStore();
+  const { openSearch, toggleSidebar, sidebarCollapsed, openSettings } = useUiStore();
   const { sessions, createSession, updateSession, deleteSession } =
     useSessionStore();
   const { isConnected, providers } = useProviderStore();
@@ -333,13 +333,6 @@ export function Sidebar() {
           active={isActive("/models")}
         />
 
-        {/* Settings */}
-        <NavItem
-          icon={<Settings className="h-4 w-4" />}
-          label="Settings"
-          to="/settings"
-          active={isActive("/settings")}
-        />
 
         {/* Projects (pinned + recent), each expandable to its sessions */}
         {!sidebarCollapsed && projects.length > 0 && (
@@ -658,38 +651,19 @@ export function Sidebar() {
         )}
       </nav>
 
-      {/* Footer — Provider Status */}
-      <div className={cn("border-t border-[var(--color-verdant-border)]", sidebarCollapsed ? "py-3 flex justify-center" : "px-4 py-3")}>
-        {sidebarCollapsed ? (
-          <div
-            className={cn(
-              "h-2 w-2 rounded-full",
-              isConnected ? "bg-emerald-500" : "bg-zinc-300",
-            )}
-            title={isConnected ? `Connected: ${defaultProvider?.name || 'ollama'}` : 'Disconnected'}
-          />
-        ) : (
-          <div className="flex items-center justify-between text-xs text-zinc-400">
-            <div className="flex items-center gap-1.5">
-              <div
-                className={cn(
-                  "h-1.5 w-1.5 rounded-full",
-                  isConnected ? "bg-emerald-500" : "bg-zinc-300",
-                )}
-              />
-              <span className="font-mono text-[11px]">
-                {defaultProvider?.name.toLowerCase() || "ollama"}
-              </span>
-              <span>·</span>
-              <span className="font-mono text-[11px] truncate max-w-[70px]">
-                {defaultProvider?.endpoint
-                  .replace("http://", "")
-                  .replace("https://", "") || "localhost"}
-              </span>
-            </div>
-            <span className="font-mono text-[11px]">v0.1.0</span>
-          </div>
-        )}
+      {/* Footer — Settings Only */}
+      <div className={cn("border-t border-[var(--color-verdant-border)] flex", sidebarCollapsed ? "p-3 justify-center" : "p-3")}>
+        <button
+          onClick={openSettings}
+          className={cn(
+            "text-[var(--color-verdant-text)] hover:bg-[var(--color-verdant-hover)] transition-colors rounded-md flex items-center w-full cursor-pointer",
+            sidebarCollapsed ? "justify-center p-2" : "justify-start px-3 py-2 gap-3"
+          )}
+          title="Settings"
+        >
+          <Settings className={cn("shrink-0", sidebarCollapsed ? "h-5 w-5" : "h-4 w-4 text-zinc-500")} />
+          {!sidebarCollapsed && <span className="text-sm font-medium">Settings</span>}
+        </button>
       </div>
     </aside>
   );
