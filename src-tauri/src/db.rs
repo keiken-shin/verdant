@@ -64,6 +64,14 @@ impl Database {
             )?;
         }
 
+        if version < 4 {
+            conn.execute_batch(include_str!("../migrations/004_personas.sql"))?;
+            conn.execute(
+                "INSERT INTO schema_version (version, applied_at) VALUES (4, datetime('now'))",
+                [],
+            )?;
+        }
+
         Ok(())
     }
 }

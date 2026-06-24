@@ -4,9 +4,10 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useProviderStore } from '@/stores/providerStore';
 import { useUiStore } from '@/stores/uiStore';
 import { providerRegistry } from '@/providers/registry';
+import { usePersonaStore } from '@/stores/personaStore';
 import type { ModelInfo } from '@/types';
 import { cn } from '@/utils';
-import { X, Shield, Cpu, Settings } from 'lucide-react';
+import { X, Shield, Cpu, Settings, Users, Plus, Trash2, Edit2, Check } from 'lucide-react';
 
 interface SettingSectionProps {
   label?: string;
@@ -117,18 +118,65 @@ function SelectSetting({ title, description, value, onChange, id, children }: Se
   );
 }
 
-type TabType = 'general' | 'privacy' | 'providers';
+type TabType = 'general' | 'privacy' | 'providers' | 'personas';
 
 export function SettingsModal() {
   const { settingsOpen, closeSettings } = useUiStore();
   const { settings, updateSetting } = useSettingsStore();
   const { providers, setIsConnected } = useProviderStore();
+  const { personas, fetchPersonas, createPersona, updatePersona, deletePersona } = usePersonaStore();
   const [activeTab, setActiveTab] = useState<TabType>('general');
   const [connectionStatus, setConnectionStatus] = useState<'unknown' | 'connected' | 'disconnected'>('unknown');
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
+  
+  // Persona editor state
+  const [isEditingPersona, setIsEditingPersona] = useState(false);
+  const [editingPersonaId, setEditingPersonaId] = useState<string | null>(null);
+  const [editPersonaName, setEditPersonaName] = useState('');
+  const [editPersonaDesc, setEditPersonaDesc] = useState('');
+  const [editPersonaPrompt, setEditPersonaPrompt] = useState('');
+  
   const modalRef = useRef<HTMLDivElement>(null);
+
+  const startEditPersona = (p?: typeof personas[0]) => {
+    setIsEditingPersona(true);
+    if (p) {
+      setEditingPersonaId(p.id);
+      setEditPersonaName(p.name);
+      setEditPersonaDesc(p.description || '');
+      setEditPersonaPrompt(p.prompt);
+    } else {
+      setEditingPersonaId(null);
+      setEditPersonaName('');
+      setEditPersonaDesc('');
+      setEditPersonaPrompt('');
+    }
+  };
+
+  const cancelEditPersona = () => {
+    setIsEditingPersona(false);
+    setEditingPersonaId(null);
+  };
+
+  const savePersona = async () => {
+    if (!editPersonaName.trim() || !editPersonaPrompt.trim()) return;
+    if (editingPersonaId) {
+      await updatePersona(editingPersonaId, {
+        name: editPersonaName.trim(),
+        description: editPersonaDesc.trim() || undefined,
+        prompt: editPersonaPrompt.trim(),
+      });
+    } else {
+      await createPersona(
+        editPersonaName.trim(),
+        editPersonaPrompt.trim(),
+        editPersonaDesc.trim() || undefined
+      );
+    }
+    cancelEditPersona();
+  };
 
   const testConnection = async () => {
     const defaultProvider = providers.find((p) => p.is_default) || providers[0];
@@ -152,6 +200,12 @@ export function SettingsModal() {
       testConnection();
     }
   }, [providers, settings.ollama_host, settingsOpen, activeTab]);
+
+  useEffect(() => {
+    if (settingsOpen && personas.length === 0) {
+      fetchPersonas();
+    }
+  }, [settingsOpen, personas.length, fetchPersonas]);
 
   useEffect(() => {
     const loadModels = async () => {
@@ -366,6 +420,138 @@ export function SettingsModal() {
             </SettingSection>
           </div>
         );
+      case 'personas':
+        if (isEditingPersona) {
+          return (
+            <div className="animate-in fade-in slide-in-from-right-4 duration-200 h-full flex flex-col">
+              <div className="flex items-center gap-3 mb-6 border-b border-zinc-100 pb-4">
+                <button 
+                  onClick={cancelEditPersona}
+                  className="p-1 -ml-1 text-zinc-400 hover:text-zinc-600 rounded hover:bg-zinc-100 transition-colors cursor-pointer"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+                <h2 className="text-xl font-semibold text-zinc-800">
+                  {editingPersonaId ? 'Edit Persona' : 'New Persona'}
+                </h2>
+              </div>
+              
+              <div className="space-y-5 flex-1 overflow-y-auto">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-800 mb-1">Name</label>
+                  <input
+                    type="text"
+                    value={editPersonaName}
+                    onChange={(e) => setEditPersonaName(e.target.value)}
+                    placeholder="e.g. Yoda, Code Reviewer"
+                    className="w-full px-3 py-2 text-sm border border-zinc-200 rounded-lg outline-none focus:border-[var(--color-verdant-primary)] transition-colors text-zinc-700 bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-800 mb-1">Description (optional)</label>
+                  <input
+                    type="text"
+                    value={editPersonaDesc}
+                    onChange={(e) => setEditPersonaDesc(e.target.value)}
+                    placeholder="A brief explanation of what this persona does."
+                    className="w-full px-3 py-2 text-sm border border-zinc-200 rounded-lg outline-none focus:border-[var(--color-verdant-primary)] transition-colors text-zinc-700 bg-white"
+                  />
+                </div>
+                <div className="flex flex-col flex-1 h-[200px] min-h-[200px]">
+                  <label className="block text-sm font-medium text-zinc-800 mb-1">System Prompt</label>
+                  <textarea
+                    value={editPersonaPrompt}
+                    onChange={(e) => setEditPersonaPrompt(e.target.value)}
+                    placeholder="You are a helpful assistant..."
+                    className="w-full flex-1 px-3 py-2 text-sm font-mono border border-zinc-200 rounded-lg outline-none focus:border-[var(--color-verdant-primary)] transition-colors text-zinc-700 bg-white resize-none"
+                  />
+                </div>
+              </div>
+              
+              <div className="mt-6 pt-4 border-t border-zinc-100 flex justify-end gap-3">
+                <button
+                  onClick={cancelEditPersona}
+                  className="px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={savePersona}
+                  disabled={!editPersonaName.trim() || !editPersonaPrompt.trim()}
+                  className="px-4 py-2 text-sm font-medium text-white bg-[var(--color-verdant-primary)] hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2"
+                >
+                  <Check className="h-4 w-4" />
+                  Save
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-200">
+            <h2 className="text-xl font-semibold text-zinc-800 mb-6 border-b border-zinc-100 pb-4">Personas</h2>
+            <SettingSection>
+              <SelectSetting
+                id="setting-default-persona"
+                title="Global Default Persona"
+                description="The persona that Verdant will use for new global chat sessions."
+                value={settings.default_persona_id || ''}
+                onChange={(v) => updateSetting('default_persona_id', v)}
+              >
+                {personas.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </SelectSetting>
+            </SettingSection>
+
+            <SettingSection label="Manage Personas">
+              <div className="space-y-4">
+                {personas.map(p => (
+                  <div key={p.id} className="p-4 border border-zinc-200 rounded-xl bg-zinc-50/50">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-medium text-zinc-800">{p.name}</h4>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => startEditPersona(p)}
+                          className="p-1.5 text-zinc-400 hover:text-[var(--color-verdant-primary)] hover:bg-emerald-50 rounded-md transition-colors cursor-pointer"
+                          title="Edit persona"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                        {p.id !== 'default-assistant' && (
+                          <button
+                            onClick={() => {
+                              if (confirm('Delete this persona?')) {
+                                deletePersona(p.id);
+                                if (settings.default_persona_id === p.id) {
+                                  updateSetting('default_persona_id', 'default-assistant');
+                                }
+                              }
+                            }}
+                            className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors cursor-pointer"
+                            title="Delete persona"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {p.description && <div className="text-sm text-zinc-500">{p.description}</div>}
+                  </div>
+                ))}
+                
+                <button
+                  onClick={() => startEditPersona()}
+                  className="w-full py-3 flex items-center justify-center gap-2 border border-dashed border-zinc-300 rounded-xl text-sm font-medium text-zinc-500 hover:text-[var(--color-verdant-primary)] hover:border-[var(--color-verdant-primary)] hover:bg-emerald-50/50 transition-all cursor-pointer"
+                >
+                  <Plus className="h-4 w-4" />
+                  Create New Persona
+                </button>
+              </div>
+            </SettingSection>
+          </div>
+        );
     }
   };
 
@@ -428,6 +614,18 @@ export function SettingsModal() {
             >
               <Cpu className="h-4 w-4" />
               Providers
+            </button>
+            <button
+              onClick={() => setActiveTab('personas')}
+              className={cn(
+                "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 cursor-pointer",
+                activeTab === 'personas'
+                  ? "bg-white text-[var(--color-verdant-primary)] shadow-sm border border-zinc-200/50"
+                  : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 border border-transparent"
+              )}
+            >
+              <Users className="h-4 w-4" />
+              Personas
             </button>
           </nav>
           

@@ -10,6 +10,7 @@ pub struct Project {
     pub description: Option<String>,
     pub instructions: Option<String>,
     pub color: Option<String>,
+    pub persona_id: Option<String>,
     pub is_pinned: bool,
     pub last_opened_at: Option<String>,
     pub created_at: String,
@@ -22,6 +23,7 @@ pub struct CreateProjectInput {
     pub description: Option<String>,
     pub instructions: Option<String>,
     pub color: Option<String>,
+    pub persona_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -30,10 +32,11 @@ pub struct UpdateProjectInput {
     pub description: Option<String>,
     pub instructions: Option<String>,
     pub color: Option<String>,
+    pub persona_id: Option<String>,
     pub is_pinned: Option<bool>,
 }
 
-const PROJECT_COLS: &str = "id, name, description, instructions, color, is_pinned, last_opened_at, created_at, updated_at";
+const PROJECT_COLS: &str = "id, name, description, instructions, color, persona_id, is_pinned, last_opened_at, created_at, updated_at";
 
 fn map_project(row: &rusqlite::Row) -> rusqlite::Result<Project> {
     Ok(Project {
@@ -42,10 +45,11 @@ fn map_project(row: &rusqlite::Row) -> rusqlite::Result<Project> {
         description: row.get(2)?,
         instructions: row.get(3)?,
         color: row.get(4)?,
-        is_pinned: row.get::<_, i32>(5)? != 0,
-        last_opened_at: row.get(6)?,
-        created_at: row.get(7)?,
-        updated_at: row.get(8)?,
+        persona_id: row.get(5)?,
+        is_pinned: row.get::<_, i32>(6)? != 0,
+        last_opened_at: row.get(7)?,
+        created_at: row.get(8)?,
+        updated_at: row.get(9)?,
     })
 }
 
@@ -80,9 +84,9 @@ pub fn create_project(input: CreateProjectInput, db: State<Database>) -> Result<
     let name = input.name.unwrap_or_else(|| "Untitled Project".to_string());
 
     conn.execute(
-        "INSERT INTO projects (id, name, description, instructions, color, is_pinned, last_opened_at, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, ?7, ?8)",
-        params![id, name, input.description, input.instructions, input.color, now, now, now],
+        "INSERT INTO projects (id, name, description, instructions, color, persona_id, is_pinned, last_opened_at, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, ?7, ?8, ?9)",
+        params![id, name, input.description, input.instructions, input.color, input.persona_id, now, now, now],
     ).map_err(|e| e.to_string())?;
 
     Ok(Project {
@@ -91,6 +95,7 @@ pub fn create_project(input: CreateProjectInput, db: State<Database>) -> Result<
         description: input.description,
         instructions: input.instructions,
         color: input.color,
+        persona_id: input.persona_id,
         is_pinned: false,
         last_opened_at: Some(now.clone()),
         created_at: now.clone(),
@@ -118,6 +123,12 @@ pub fn update_project(id: String, input: UpdateProjectInput, db: State<Database>
     if let Some(color) = input.color {
         conn.execute("UPDATE projects SET color = ?1, updated_at = ?2 WHERE id = ?3",
             params![color, now, id]).map_err(|e| e.to_string())?;
+    }
+    if let Some(persona_id) = input.persona_id {
+        // Allow unsetting persona_id by passing an empty string
+        let val = if persona_id.is_empty() { None } else { Some(persona_id) };
+        conn.execute("UPDATE projects SET persona_id = ?1, updated_at = ?2 WHERE id = ?3",
+            params![val, now, id]).map_err(|e| e.to_string())?;
     }
     if let Some(is_pinned) = input.is_pinned {
         conn.execute("UPDATE projects SET is_pinned = ?1, updated_at = ?2 WHERE id = ?3",

@@ -10,6 +10,7 @@ import { useMessageStore } from '@/stores/messageStore';
 import { useProviderStore } from '@/stores/providerStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useProjectStore } from '@/stores/projectStore';
+import { usePersonaStore } from '@/stores/personaStore';
 import { buildProjectContext } from '@/services/sessionContext';
 import { useModels } from '@/hooks/useModels';
 import type { Message } from '@/types';
@@ -243,6 +244,26 @@ export function ChatPage() {
           console.error('Failed to build project context:', e);
         }
       }
+    }
+
+    // Persona context: prepend the persona prompt as a system message.
+    let personas = usePersonaStore.getState().personas;
+    if (personas.length === 0) {
+      await usePersonaStore.getState().fetchPersonas();
+      personas = usePersonaStore.getState().personas;
+    }
+    
+    let personaId = settings.default_persona_id;
+    if (sessionProjectId) {
+      const proj = useProjectStore.getState().projects.find((p) => p.id === sessionProjectId);
+      if (proj && proj.persona_id) {
+        personaId = proj.persona_id;
+      }
+    }
+    
+    const selectedPersona = personas.find(p => p.id === personaId) || personas.find(p => p.id === 'default-assistant');
+    if (selectedPersona && selectedPersona.prompt) {
+      history.unshift({ role: 'system', content: selectedPersona.prompt });
     }
 
     const abortCtrl = new AbortController();

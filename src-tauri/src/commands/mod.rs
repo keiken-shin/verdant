@@ -7,3 +7,4 @@ pub mod graph;
 pub mod settings;
 pub mod providers;
 pub mod export;
+pub mod personas;

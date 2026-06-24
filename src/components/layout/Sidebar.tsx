@@ -189,10 +189,9 @@ export function Sidebar() {
     return path.startsWith(route);
   };
 
-  const handleNewChat = useCallback(async () => {
-    const session = await createSession("Untitled");
-    navigate(`/chat/${session.id}`);
-  }, [createSession, navigate]);
+  const handleNewChat = useCallback(() => {
+    navigate('/chat');
+  }, [navigate]);
 
   // Keyboard shortcut listener for New Chat (Cmd+N / Ctrl+N)
   useEffect(() => {

@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Network, MessageSquare, FileText, Clock, Trash2, ArrowLeft, Edit2, Check, X } from 'lucide-react';
+import { Network, MessageSquare, FileText, Clock, Trash2, ArrowLeft, Edit2, Check, X, Settings } from 'lucide-react';
 import { useProjectStore } from '@/stores/projectStore';
 import { cn } from '@/utils';
 import { useConfirmStore } from '@/stores/confirmStore';
 import type { Project } from '@/types';
 
-export const TABS = ['Chat', 'Files', 'Graph', 'Timeline'] as const;
+export const TABS = ['Chat', 'Files', 'Graph', 'Timeline', 'Settings'] as const;
 export type Tab = typeof TABS[number];
 
 interface ProjectWorkspaceHeaderProps {
@@ -119,7 +119,7 @@ export function ProjectWorkspaceHeader({ project, tab, setTab, filesCount }: Pro
       {/* Tabs */}
       <div className="flex items-center gap-1 mt-5 -mb-3">
         {TABS.map((t) => {
-          const Icon = { Chat: MessageSquare, Files: FileText, Graph: Network, Timeline: Clock }[t];
+          const Icon = { Chat: MessageSquare, Files: FileText, Graph: Network, Timeline: Clock, Settings: Settings }[t];
           return (
             <button
               key={t}

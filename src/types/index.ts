@@ -22,7 +22,17 @@ export interface Project {
   instructions?: string;
   color?: string;
   is_pinned: boolean;
+  persona_id?: string;
   last_opened_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Persona {
+  id: string;
+  name: string;
+  description?: string;
+  prompt: string;
   created_at: string;
   updated_at: string;
 }
@@ -188,8 +198,9 @@ export interface AppSettings {
   auto_remember: boolean;
   show_graph_panel: boolean;
   anonymous_telemetry: boolean;
-  theme: string;
+  theme: 'paper-light' | 'dark';
   extraction_model: string;
+  default_persona_id: string;
 }
 
 export type SessionTag = 'RESEARCH' | 'WRITING' | 'READING' | 'DESIGN' | 'CODING' | 'OTHER';
