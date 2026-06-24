@@ -116,7 +116,10 @@ export function UserMessage({ message, onEdit, variantIndex, totalVariants, onSw
             <div className="bg-zinc-100 rounded-2xl rounded-tr-sm px-4 py-3 text-sm text-zinc-800 leading-relaxed whitespace-pre-wrap">
               {message.content}
             </div>
-            <div className="absolute -bottom-5 right-0 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+            <div className="absolute -bottom-6 right-0 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2">
+              <span className="text-[10px] text-zinc-400 font-mono select-none">
+                {new Intl.DateTimeFormat('default', { hour: 'numeric', minute: '2-digit' }).format(new Date(message.created_at))}
+              </span>
               {onEdit && (
                 <button
                   onClick={() => setEditing(true)}
@@ -190,8 +193,9 @@ export function AssistantMessage({ message, onCopy, onRegenerate, onFork, isLast
       </div>
 
       {/* Action buttons */}
-      <div className="flex items-center gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button
+      <div className="flex items-center justify-between mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-2">
+          <button
           onClick={handleCopy}
           className="flex items-center justify-center p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded transition-colors"
           aria-label="Copy response"
@@ -239,6 +243,10 @@ export function AssistantMessage({ message, onCopy, onRegenerate, onFork, isLast
             </button>
           </div>
         )}
+        </div>
+        <div className="text-[10px] text-zinc-400 font-mono select-none pr-2">
+          {new Intl.DateTimeFormat('default', { hour: 'numeric', minute: '2-digit' }).format(new Date(message.created_at))}
+        </div>
       </div>
     </div>
   );
