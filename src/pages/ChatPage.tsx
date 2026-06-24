@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useConfirmStore } from '@/stores/confirmStore';
-import { Edit2, Trash2, Check, X, FolderKanban } from 'lucide-react';
+import { Edit2, Trash2, Check, X, FolderKanban, ArrowDown } from 'lucide-react';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { UserMessage, AssistantMessage, StreamingMessage } from '@/components/chat/MessageBubbles';
 import { SectionLabel } from '@/components/ui/PageHeader';
@@ -69,7 +69,20 @@ export function ChatPage() {
   const [streamingParentId, setStreamingParentId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const sentInitialRef = useRef<string | null>(null);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+
+  const handleScroll = useCallback(() => {
+    if (!scrollContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+    const isScrolledUp = scrollHeight - scrollTop - clientHeight > 150;
+    setShowScrollButton(isScrolledUp);
+  }, []);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   const currentSession = sessions.find((s) => s.id === sessionId);
   const project = currentSession?.project_id
@@ -129,9 +142,16 @@ export function ChatPage() {
   }, [messages, sessionVariants]);
 
   // Scroll to bottom when messages change
+  const prevPathLengthRef = useRef(activePath.length);
+  
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [activePath, streamingContent]);
+    const isNewMessage = activePath.length > prevPathLengthRef.current;
+    prevPathLengthRef.current = activePath.length;
+
+    if (isNewMessage || !showScrollButton) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [activePath.length, streamingContent, showScrollButton]);
 
   const handleSend = useCallback(async (content: string, overrideParentId?: string) => {
     if (!activeModelId) return;
@@ -523,7 +543,11 @@ export function ChatPage() {
       </div>
 
       {/* Messages / Welcome */}
-      <div className="flex-1 overflow-y-auto">
+      <div 
+        ref={scrollContainerRef}
+        className="flex-1 overflow-y-auto relative"
+        onScroll={handleScroll}
+      >
         {!hasMessages ? (
           <div className="flex h-full">
             <div className="flex-1 flex flex-col px-8 py-12">
@@ -589,7 +613,16 @@ export function ChatPage() {
       </div>
 
       {/* Chat Input */}
-      <div className={`px-8 pb-6 ${!hasMessages ? 'pt-4' : 'pt-4'}`}>
+      <div className={`relative px-8 pb-6 ${!hasMessages ? 'pt-4' : 'pt-4'}`}>
+        {showScrollButton && hasMessages && (
+          <button
+            onClick={scrollToBottom}
+            className="absolute -top-12 left-1/2 transform -translate-x-1/2 p-2 bg-[var(--color-verdant-muted)] text-white rounded-full shadow-sm hover:bg-[var(--color-verdant-primary)] transition-colors z-10 flex items-center justify-center opacity-80 hover:opacity-100"
+            aria-label="Scroll to bottom"
+          >
+            <ArrowDown className="h-4 w-4" />
+          </button>
+        )}
         <ChatInput
           onSend={handleSend}
           onStop={stopStreaming}
