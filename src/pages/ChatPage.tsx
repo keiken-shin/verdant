@@ -29,7 +29,7 @@ function ChatWelcome({ onSuggestion }: { onSuggestion: (text: string) => void })
         Let&apos;s get<br />started.
       </h1>
       <p className="text-base text-zinc-500 leading-relaxed mb-10 max-w-lg">
-        Wollama is a local-first workspace for thinking with language models. Your conversations, memories, and the connections between them stay on your machine — a small, slow, private notebook with a graph for a mind.
+        Verdant is a local-first workspace for thinking with language models. Your conversations, memories, and the connections between them stay on your machine — a small, slow, private notebook with a graph for a mind.
       </p>
 
       <div>

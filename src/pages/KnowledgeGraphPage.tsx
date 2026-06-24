@@ -44,7 +44,7 @@ function AddNodeModal({ onAdd, onClose }: { onAdd: (label: string, cat: NodeCate
               onChange={(e) => setLabel(e.target.value)}
               autoFocus
               placeholder="e.g. Pattern Language"
-              className="w-full px-3 py-2 text-sm border border-zinc-200 rounded-lg outline-none focus:border-[var(--color-wollama-primary)] text-zinc-800"
+              className="w-full px-3 py-2 text-sm border border-zinc-200 rounded-lg outline-none focus:border-[var(--color-verdant-primary)] text-zinc-800"
             />
           </div>
           <div>
@@ -167,7 +167,7 @@ export function KnowledgeGraphPage() {
   const handleExport = async () => {
     try {
       const json = await invoke<string>('export_graph_json');
-      const path = await save({ defaultPath: 'wollama-graph.json', filters: [{ name: 'JSON', extensions: ['json'] }] });
+      const path = await save({ defaultPath: 'verdant-graph.json', filters: [{ name: 'JSON', extensions: ['json'] }] });
       if (path) await writeTextFile(path, json);
     } catch (e) {
       console.error('Export failed:', e);
@@ -254,7 +254,7 @@ export function KnowledgeGraphPage() {
             </p>
             <button
               onClick={() => setAddModalOpen(true)}
-              className="mt-4 flex items-center gap-1.5 px-3 py-2 text-xs text-[var(--color-wollama-primary)] hover:bg-[var(--color-wollama-hover)] rounded-lg transition-colors"
+              className="mt-4 flex items-center gap-1.5 px-3 py-2 text-xs text-[var(--color-verdant-primary)] hover:bg-[var(--color-verdant-hover)] rounded-lg transition-colors"
             >
               <Plus className="h-3.5 w-3.5" />
               Add your first node

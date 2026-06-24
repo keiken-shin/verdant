@@ -32,7 +32,7 @@ function MemoryCard({
     <div className="border-b border-zinc-100 py-4 group">
       {editing ? (
         <div className="flex gap-3">
-          <Brain className="h-4 w-4 text-[var(--color-wollama-primary)] shrink-0 mt-1" />
+          <Brain className="h-4 w-4 text-[var(--color-verdant-primary)] shrink-0 mt-1" />
           <div className="flex-1">
             <select
               value={editCategory}
@@ -61,7 +61,7 @@ function MemoryCard({
         </div>
       ) : (
         <div className="flex gap-3">
-          <Brain className="h-4 w-4 text-[var(--color-wollama-primary)] shrink-0 mt-0.5" />
+          <Brain className="h-4 w-4 text-[var(--color-verdant-primary)] shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <Badge tag={memory.category}>{memory.category}</Badge>
@@ -110,10 +110,10 @@ function AddMemoryForm({ onAdd }: { onAdd: (content: string, category: MemoryCat
     return (
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center gap-1.5 text-sm text-[var(--color-wollama-primary)] hover:opacity-80 transition-opacity mt-4"
+        className="flex items-center gap-1.5 text-sm text-[var(--color-verdant-primary)] hover:opacity-80 transition-opacity mt-4"
       >
         <Plus className="h-4 w-4" />
-        Teach Wollama something new
+        Teach Verdant something new
       </button>
     );
   }
@@ -135,7 +135,7 @@ function AddMemoryForm({ onAdd }: { onAdd: (content: string, category: MemoryCat
         value={content}
         onChange={(e) => setContent(e.target.value)}
         autoFocus
-        placeholder="What should Wollama remember?"
+        placeholder="What should Verdant remember?"
         className="w-full text-sm border-0 outline-none resize-none text-zinc-800 placeholder:text-zinc-400 min-h-[60px]"
       />
       <div className="flex gap-2 mt-3 pt-3 border-t border-zinc-100">
@@ -158,7 +158,7 @@ export function MemoriesPage() {
   const handleExport = async () => {
     try {
       const json = await invoke<string>('export_memories_json');
-      const path = await save({ defaultPath: 'wollama-memories.json', filters: [{ name: 'JSON', extensions: ['json'] }] });
+      const path = await save({ defaultPath: 'verdant-memories.json', filters: [{ name: 'JSON', extensions: ['json'] }] });
       if (path) await writeTextFile(path, json);
     } catch (e) {
       console.error('Export failed:', e);
@@ -185,7 +185,7 @@ export function MemoriesPage() {
       <div>
         {memories.length === 0 ? (
           <div className="py-8 text-center text-zinc-400 text-sm">
-            No memories yet. Wollama will remember things as you chat, or you can add them manually.
+            No memories yet. Verdant will remember things as you chat, or you can add them manually.
           </div>
         ) : (
           memories.map((memory) => (
