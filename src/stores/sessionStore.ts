@@ -8,8 +8,9 @@ interface SessionStore {
   loading: boolean;
 
   fetchSessions: () => Promise<void>;
+  fetchProjectSessions: (projectId: string) => Promise<Session[]>;
   setActiveSession: (id: string | null) => void;
-  createSession: (title?: string, modelId?: string) => Promise<Session>;
+  createSession: (title?: string, modelId?: string, projectId?: string) => Promise<Session>;
   updateSession: (id: string, data: Partial<Session>) => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
   searchSessions: (query: string) => Promise<Session[]>;
@@ -31,11 +32,21 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
+  fetchProjectSessions: async (projectId) => {
+    const sessions = await invoke<Session[]>('get_project_sessions', { projectId });
+    // Merge into the global list so the rest of the app sees them too.
+    set((state) => {
+      const others = state.sessions.filter((s) => s.project_id !== projectId);
+      return { sessions: [...sessions, ...others] };
+    });
+    return sessions;
+  },
+
   setActiveSession: (id) => set({ activeSessionId: id }),
 
-  createSession: async (title = 'Untitled', modelId?: string) => {
+  createSession: async (title = 'Untitled', modelId?: string, projectId?: string) => {
     const session = await invoke<Session>('create_session', {
-      input: { title, model_id: modelId },
+      input: { title, model_id: modelId, project_id: projectId },
     });
     set((state) => ({ sessions: [session, ...state.sessions] }));
     return session;
