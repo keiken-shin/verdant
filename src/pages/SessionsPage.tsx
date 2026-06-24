@@ -85,7 +85,7 @@ export function SessionsPage() {
                     onClick={(e) => handlePin(e, session)}
                     className={cn(
                       'p-1 rounded hover:bg-zinc-100 transition-colors',
-                      session.is_pinned ? 'text-[var(--color-wollama-primary)]' : 'text-zinc-400'
+                      session.is_pinned ? 'text-[var(--color-verdant-primary)]' : 'text-zinc-400'
                     )}
                     title={session.is_pinned ? 'Unpin' : 'Pin'}
                   >

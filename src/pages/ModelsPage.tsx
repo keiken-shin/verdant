@@ -19,9 +19,9 @@ function ModelRow({ model, isActive, onUse }: { model: ModelInfo; isActive: bool
         <div className="flex items-center gap-3">
           <div className={cn(
             'h-7 w-7 rounded-md flex items-center justify-center shrink-0',
-            isActive ? 'bg-[var(--color-wollama-primary)]/10' : 'bg-zinc-100'
+            isActive ? 'bg-[var(--color-verdant-primary)]/10' : 'bg-zinc-100'
           )}>
-            <Cpu className={cn('h-3.5 w-3.5', isActive ? 'text-[var(--color-wollama-primary)]' : 'text-zinc-400')} />
+            <Cpu className={cn('h-3.5 w-3.5', isActive ? 'text-[var(--color-verdant-primary)]' : 'text-zinc-400')} />
           </div>
           <div>
             <div className="font-mono text-sm text-zinc-800 font-medium">{model.name}</div>
@@ -40,7 +40,7 @@ function ModelRow({ model, isActive, onUse }: { model: ModelInfo; isActive: bool
       </td>
       <td className="py-4 text-right pr-4">
         {isActive ? (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-[var(--color-wollama-primary)] text-xs text-[var(--color-wollama-primary)] font-medium">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-[var(--color-verdant-primary)] text-xs text-[var(--color-verdant-primary)] font-medium">
             ✓ active
           </span>
         ) : (
