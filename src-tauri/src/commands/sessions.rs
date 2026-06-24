@@ -12,6 +12,9 @@ pub struct Session {
     pub provider_id: Option<String>,
     pub is_pinned: bool,
     pub preview: Option<String>,
+    pub project_id: Option<String>,
+    pub summary: Option<String>,
+    pub summary_updated_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -21,6 +24,7 @@ pub struct CreateSessionInput {
     pub title: Option<String>,
     pub model_id: Option<String>,
     pub provider_id: Option<String>,
+    pub project_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -30,52 +34,56 @@ pub struct UpdateSessionInput {
     pub model_id: Option<String>,
     pub is_pinned: Option<bool>,
     pub preview: Option<String>,
+    pub project_id: Option<String>,
+}
+
+// Shared column list + row mapper so every SELECT stays in sync with the struct.
+const SESSION_COLS: &str = "id, title, tag, model_id, provider_id, is_pinned, preview, project_id, summary, summary_updated_at, created_at, updated_at";
+
+fn map_session(row: &rusqlite::Row) -> rusqlite::Result<Session> {
+    Ok(Session {
+        id: row.get(0)?,
+        title: row.get(1)?,
+        tag: row.get(2)?,
+        model_id: row.get(3)?,
+        provider_id: row.get(4)?,
+        is_pinned: row.get::<_, i32>(5)? != 0,
+        preview: row.get(6)?,
+        project_id: row.get(7)?,
+        summary: row.get(8)?,
+        summary_updated_at: row.get(9)?,
+        created_at: row.get(10)?,
+        updated_at: row.get(11)?,
+    })
 }
 
 #[tauri::command]
 pub fn get_sessions(db: State<Database>) -> Result<Vec<Session>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    let mut stmt = conn.prepare(
-        "SELECT id, title, tag, model_id, provider_id, is_pinned, preview, created_at, updated_at
-         FROM sessions ORDER BY is_pinned DESC, updated_at DESC"
-    ).map_err(|e| e.to_string())?;
+    let sql = format!(
+        "SELECT {SESSION_COLS} FROM sessions ORDER BY is_pinned DESC, updated_at DESC"
+    );
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let sessions = stmt.query_map([], map_session).map_err(|e| e.to_string())?;
+    sessions.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
 
-    let sessions = stmt.query_map([], |row| {
-        Ok(Session {
-            id: row.get(0)?,
-            title: row.get(1)?,
-            tag: row.get(2)?,
-            model_id: row.get(3)?,
-            provider_id: row.get(4)?,
-            is_pinned: row.get::<_, i32>(5)? != 0,
-            preview: row.get(6)?,
-            created_at: row.get(7)?,
-            updated_at: row.get(8)?,
-        })
-    }).map_err(|e| e.to_string())?;
-
+#[tauri::command]
+pub fn get_project_sessions(project_id: String, db: State<Database>) -> Result<Vec<Session>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let sql = format!(
+        "SELECT {SESSION_COLS} FROM sessions WHERE project_id = ?1 ORDER BY is_pinned DESC, updated_at DESC"
+    );
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let sessions = stmt.query_map(params![project_id], map_session).map_err(|e| e.to_string())?;
     sessions.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn get_session(id: String, db: State<Database>) -> Result<Option<Session>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    let result = conn.query_row(
-        "SELECT id, title, tag, model_id, provider_id, is_pinned, preview, created_at, updated_at
-         FROM sessions WHERE id = ?1",
-        params![id],
-        |row| Ok(Session {
-            id: row.get(0)?,
-            title: row.get(1)?,
-            tag: row.get(2)?,
-            model_id: row.get(3)?,
-            provider_id: row.get(4)?,
-            is_pinned: row.get::<_, i32>(5)? != 0,
-            preview: row.get(6)?,
-            created_at: row.get(7)?,
-            updated_at: row.get(8)?,
-        }),
-    );
+    let sql = format!("SELECT {SESSION_COLS} FROM sessions WHERE id = ?1");
+    let result = conn.query_row(&sql, params![id], map_session);
     match result {
         Ok(s) => Ok(Some(s)),
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
@@ -91,9 +99,9 @@ pub fn create_session(input: CreateSessionInput, db: State<Database>) -> Result<
     let title = input.title.unwrap_or_else(|| "Untitled".to_string());
 
     conn.execute(
-        "INSERT INTO sessions (id, title, model_id, provider_id, is_pinned, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, 0, ?5, ?6)",
-        params![id, title, input.model_id, input.provider_id, now, now],
+        "INSERT INTO sessions (id, title, model_id, provider_id, project_id, is_pinned, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, ?7)",
+        params![id, title, input.model_id, input.provider_id, input.project_id, now, now],
     ).map_err(|e| e.to_string())?;
 
     Ok(Session {
@@ -104,6 +112,9 @@ pub fn create_session(input: CreateSessionInput, db: State<Database>) -> Result<
         provider_id: input.provider_id,
         is_pinned: false,
         preview: None,
+        project_id: input.project_id,
+        summary: None,
+        summary_updated_at: None,
         created_at: now.clone(),
         updated_at: now,
     })
@@ -134,6 +145,23 @@ pub fn update_session(id: String, input: UpdateSessionInput, db: State<Database>
         conn.execute("UPDATE sessions SET preview = ?1, updated_at = ?2 WHERE id = ?3",
             params![preview, now, id]).map_err(|e| e.to_string())?;
     }
+    if let Some(project_id) = input.project_id {
+        conn.execute("UPDATE sessions SET project_id = ?1, updated_at = ?2 WHERE id = ?3",
+            params![project_id, now, id]).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+// Persist a session's cached summary. summary_updated_at stamps the cache so
+// callers can detect staleness vs the session's own updated_at.
+#[tauri::command]
+pub fn set_session_summary(id: String, summary: String, db: State<Database>) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let now = chrono::Utc::now().to_rfc3339();
+    conn.execute(
+        "UPDATE sessions SET summary = ?1, summary_updated_at = ?2 WHERE id = ?3",
+        params![summary, now, id],
+    ).map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -149,24 +177,10 @@ pub fn delete_session(id: String, db: State<Database>) -> Result<(), String> {
 pub fn search_sessions(query: String, db: State<Database>) -> Result<Vec<Session>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let pattern = format!("%{}%", query);
-    let mut stmt = conn.prepare(
-        "SELECT id, title, tag, model_id, provider_id, is_pinned, preview, created_at, updated_at
-         FROM sessions WHERE title LIKE ?1 OR preview LIKE ?1 ORDER BY updated_at DESC LIMIT 20"
-    ).map_err(|e| e.to_string())?;
-
-    let sessions = stmt.query_map(params![pattern], |row| {
-        Ok(Session {
-            id: row.get(0)?,
-            title: row.get(1)?,
-            tag: row.get(2)?,
-            model_id: row.get(3)?,
-            provider_id: row.get(4)?,
-            is_pinned: row.get::<_, i32>(5)? != 0,
-            preview: row.get(6)?,
-            created_at: row.get(7)?,
-            updated_at: row.get(8)?,
-        })
-    }).map_err(|e| e.to_string())?;
-
+    let sql = format!(
+        "SELECT {SESSION_COLS} FROM sessions WHERE title LIKE ?1 OR preview LIKE ?1 ORDER BY updated_at DESC LIMIT 20"
+    );
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let sessions = stmt.query_map(params![pattern], map_session).map_err(|e| e.to_string())?;
     sessions.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
 }
