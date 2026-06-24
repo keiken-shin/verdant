@@ -13,10 +13,14 @@ import {
   Trash2,
   PanelLeftClose,
   PanelLeftOpen,
+  FolderKanban,
+  ChevronRight,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/utils";
 import { useSessionStore } from "@/stores/sessionStore";
 import { useProviderStore } from "@/stores/providerStore";
+import { useProjectStore } from "@/stores/projectStore";
 import { useUiStore } from "@/stores/uiStore";
 import { truncate } from "@/utils";
 
@@ -105,6 +109,7 @@ export function Sidebar() {
   const { sessions, createSession, updateSession, deleteSession } =
     useSessionStore();
   const { isConnected, providers } = useProviderStore();
+  const { projects, touchProject, updateProject, deleteProject } = useProjectStore();
 
   const path = location.pathname;
 
@@ -113,6 +118,10 @@ export function Sidebar() {
   const [activeMenuSessionId, setActiveMenuSessionId] = useState<string | null>(
     null,
   );
+  const [expandedProjectId, setExpandedProjectId] = useState<string | null>(null);
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [editProjectName, setEditProjectName] = useState("");
+  const [activeMenuProjectId, setActiveMenuProjectId] = useState<string | null>(null);
   const [logoHovered, setLogoHovered] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -120,6 +129,7 @@ export function Sidebar() {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setActiveMenuSessionId(null);
+        setActiveMenuProjectId(null);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -146,6 +156,29 @@ export function Sidebar() {
       if (path === `/chat/${id}`) {
         navigate("/");
       }
+    }
+  };
+
+  const handleSaveProjectRename = async (id: string) => {
+    if (
+      editProjectName.trim() &&
+      editProjectName.trim() !== projects.find((p) => p.id === id)?.name
+    ) {
+      await updateProject(id, { name: editProjectName.trim() });
+    }
+    setEditingProjectId(null);
+  };
+
+  const handleDeleteProject = async (id: string) => {
+    if (
+      window.confirm(
+        "Are you sure you want to delete this project? Its sessions are kept as loose chats.",
+      )
+    ) {
+      if (path === `/projects/${id}`) {
+        navigate("/projects");
+      }
+      await deleteProject(id);
     }
   };
   const isActive = (route: string) => {
@@ -257,6 +290,14 @@ export function Sidebar() {
           shortcut="⌘K"
         />
 
+        {/* Projects */}
+        <NavItem
+          icon={<FolderKanban className="h-4 w-4" />}
+          label="Projects"
+          to="/projects"
+          active={isActive("/projects")}
+        />
+
         {/* Sessions */}
         <NavItem
           icon={<MessageSquare className="h-4 w-4" />}
@@ -297,6 +338,220 @@ export function Sidebar() {
           active={isActive("/settings")}
         />
 
+        {/* Projects (pinned + recent), each expandable to its sessions */}
+        {!sidebarCollapsed && projects.length > 0 && (
+          <div className="pt-5 pb-1">
+            <div className="px-3 pb-2">
+              <span className="section-label">Projects</span>
+            </div>
+            <div className="space-y-0.5">
+              {projects.slice(0, 5).map((p) => {
+                const projectSessions = sessions.filter((s) => s.project_id === p.id);
+                const isExpanded = expandedProjectId === p.id;
+                const isProjectActive = path === `/projects/${p.id}`;
+                const isEditing = editingProjectId === p.id;
+                const isMenuOpen = activeMenuProjectId === p.id;
+
+                return (
+                  <div key={p.id}>
+                    <div className="relative group w-full flex items-center px-1">
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={editProjectName}
+                          onChange={(e) => setEditProjectName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSaveProjectRename(p.id);
+                            if (e.key === "Escape") setEditingProjectId(null);
+                          }}
+                          onBlur={() => handleSaveProjectRename(p.id)}
+                          autoFocus
+                          className="flex-1 ml-6 mr-7 px-2 py-1 text-xs border border-zinc-200 rounded bg-white outline-none focus:border-zinc-300 text-zinc-800 font-normal"
+                        />
+                      ) : (
+                        <>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpandedProjectId(isExpanded ? null : p.id);
+                            }}
+                            className="absolute left-2.5 z-10 p-0.5 text-[var(--color-verdant-muted)] hover:text-[var(--color-verdant-text)] shrink-0 cursor-pointer"
+                            aria-label={isExpanded ? "Collapse" : "Expand"}
+                          >
+                            {isExpanded ? (
+                              <ChevronDown className="h-3.5 w-3.5" />
+                            ) : (
+                              <ChevronRight className="h-3.5 w-3.5" />
+                            )}
+                          </button>
+                          <button
+                            onClick={() => {
+                              touchProject(p.id);
+                              navigate(`/projects/${p.id}`);
+                            }}
+                            className={cn(
+                              "w-full text-left pl-6 pr-7 py-1.5 rounded text-sm transition-colors truncate cursor-pointer",
+                              isProjectActive
+                                ? "bg-[var(--color-verdant-active)] text-[var(--color-verdant-primary)] font-medium"
+                                : "text-[var(--color-verdant-text)] hover:bg-[var(--color-verdant-hover)] hover:text-zinc-800",
+                            )}
+                          >
+                            {truncate(p.name, 20)}
+                          </button>
+
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveMenuProjectId(
+                                isMenuOpen ? null : p.id,
+                              );
+                            }}
+                            className={cn(
+                              "absolute right-2 p-1 rounded hover:bg-[var(--color-verdant-hover)] text-[var(--color-verdant-muted)] hover:text-[var(--color-verdant-text)] transition-all shrink-0 cursor-pointer",
+                              isMenuOpen
+                                ? "opacity-100"
+                                : "opacity-0 group-hover:opacity-100",
+                            )}
+                            title="Project actions"
+                            aria-label="Project actions"
+                          >
+                            <MoreHorizontal className="h-3.5 w-3.5" />
+                          </button>
+
+                          {isMenuOpen && (
+                            <div
+                              ref={menuRef}
+                              className="absolute top-full right-2 mt-1 w-48 bg-[var(--color-verdant-surface)] rounded shadow-lg border border-[var(--color-verdant-border)] py-1 z-50 text-[11px]"
+                            >
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditProjectName(p.name);
+                                  setEditingProjectId(p.id);
+                                  setActiveMenuProjectId(null);
+                                }}
+                                className="w-full flex items-center gap-1.5 px-2.5 py-1.5 hover:bg-[var(--color-verdant-hover)] text-[var(--color-verdant-text)] hover:text-[var(--color-verdant-accent)] transition-colors cursor-pointer"
+                              >
+                                <Edit2 className="h-3 w-3 shrink-0" />
+                                <span>Rename</span>
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteProject(p.id);
+                                  setActiveMenuProjectId(null);
+                                }}
+                                className="w-full flex items-center gap-1.5 px-2.5 py-1.5 hover:bg-red-50 text-red-600 hover:text-red-700 transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="h-3 w-3 shrink-0" />
+                                <span>Delete</span>
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    {isExpanded && (
+                      <div className="mt-0.5 mb-2 space-y-0.5">
+                        {projectSessions.slice(0, 3).map((s) => {
+                          const isEditing = editingSessionId === s.id;
+                          const isMenuOpen = activeMenuSessionId === `project-${s.id}`;
+                          const isSessionActive = path === `/chat/${s.id}`;
+
+                          return (
+                            <div key={s.id} className="relative group w-full flex items-center pr-1">
+                              {isEditing ? (
+                                <input
+                                  type="text"
+                                  value={editTitle}
+                                  onChange={(e) => setEditTitle(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") handleSaveRename(s.id);
+                                    if (e.key === "Escape") setEditingSessionId(null);
+                                  }}
+                                  onBlur={() => handleSaveRename(s.id)}
+                                  autoFocus
+                                  className="w-full ml-6 px-2 py-1 text-[13px] border border-zinc-200 rounded bg-white outline-none focus:border-zinc-300 text-zinc-800 font-normal"
+                                />
+                              ) : (
+                                <>
+                                  <button
+                                    onClick={() => navigate(`/chat/${s.id}`)}
+                                    className={cn(
+                                      "w-full text-left pl-8 pr-6 py-1.5 rounded-md text-[13px] transition-colors truncate cursor-pointer",
+                                      isSessionActive
+                                        ? "bg-[var(--color-verdant-active)] text-[var(--color-verdant-primary)] font-medium"
+                                        : "text-zinc-500 hover:bg-[var(--color-verdant-hover)] hover:text-zinc-800",
+                                    )}
+                                  >
+                                    {truncate(s.title, 22)}
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActiveMenuSessionId(isMenuOpen ? null : `project-${s.id}`);
+                                    }}
+                                    className={cn(
+                                      "absolute right-1 p-1 rounded hover:bg-[var(--color-verdant-hover)] text-[var(--color-verdant-muted)] hover:text-[var(--color-verdant-text)] transition-all shrink-0 cursor-pointer",
+                                      isMenuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                                    )}
+                                    title="Session actions"
+                                  >
+                                    <MoreHorizontal className="h-3.5 w-3.5" />
+                                  </button>
+
+                                  {isMenuOpen && (
+                                    <div
+                                      ref={menuRef}
+                                      className="absolute top-full right-2 mt-1 w-48 bg-[var(--color-verdant-surface)] rounded shadow-lg border border-[var(--color-verdant-border)] py-1 z-50 text-[11px]"
+                                    >
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setEditTitle(s.title);
+                                          setEditingSessionId(s.id);
+                                          setActiveMenuSessionId(null);
+                                        }}
+                                        className="w-full flex items-center gap-1.5 px-2.5 py-1.5 hover:bg-[var(--color-verdant-hover)] text-[var(--color-verdant-text)] hover:text-[var(--color-verdant-accent)] transition-colors cursor-pointer"
+                                      >
+                                        <Edit2 className="h-3 w-3 shrink-0" />
+                                        <span>Rename</span>
+                                      </button>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDeleteSession(s.id);
+                                          setActiveMenuSessionId(null);
+                                        }}
+                                        className="w-full flex items-center gap-1.5 px-2.5 py-1.5 hover:bg-red-50 text-red-600 hover:text-red-700 transition-colors cursor-pointer"
+                                      >
+                                        <Trash2 className="h-3 w-3 shrink-0" />
+                                        <span>Delete</span>
+                                      </button>
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          );
+                        })}
+                        {projectSessions.length > 3 && (
+                          <button
+                            onClick={() => navigate(`/projects/${p.id}`)}
+                            className="w-full text-left pl-8 pr-2 py-1.5 rounded-md text-[12px] font-medium text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 transition-colors cursor-pointer flex items-center gap-1"
+                          >
+                            View all {projectSessions.length} sessions <ChevronRight className="h-3 w-3" />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Recent Sessions */}
         {recentSessions.length > 0 && !sidebarCollapsed && (
           <div className="pt-5 pb-1">
@@ -306,7 +561,7 @@ export function Sidebar() {
             <div className="space-y-0.5">
               {recentSessions.map((session) => {
                 const isEditing = editingSessionId === session.id;
-                const isMenuOpen = activeMenuSessionId === session.id;
+                const isMenuOpen = activeMenuSessionId === `recent-${session.id}`;
                 const isSessionActive = path === `/chat/${session.id}`;
 
                 return (
@@ -345,7 +600,7 @@ export function Sidebar() {
                           onClick={(e) => {
                             e.stopPropagation();
                             setActiveMenuSessionId(
-                              isMenuOpen ? null : session.id,
+                              isMenuOpen ? null : `recent-${session.id}`,
                             );
                           }}
                           className={cn(

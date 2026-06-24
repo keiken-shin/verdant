@@ -37,6 +37,10 @@
   box-sizing: border-box;
 }
 
+button, [role="button"], a {
+  cursor: pointer;
+}
+
 html {
   font-size: 15px;
   -webkit-font-smoothing: antialiased;
