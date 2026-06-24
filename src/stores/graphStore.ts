@@ -8,9 +8,9 @@ interface GraphStore {
   edges: GraphEdge[];
   loading: boolean;
 
-  fetchGraph: () => Promise<void>;
-  addNode: (label: string, category: NodeCategory, x?: number, y?: number) => Promise<GraphNode>;
-  addEdge: (sourceId: string, targetId: string, label?: string) => Promise<GraphEdge>;
+  fetchGraph: (projectId?: string) => Promise<void>;
+  addNode: (label: string, category: NodeCategory, x?: number, y?: number, projectId?: string) => Promise<GraphNode>;
+  addEdge: (sourceId: string, targetId: string, label?: string, projectId?: string) => Promise<GraphEdge>;
   updateNodePositions: (positions: { id: string; x: number; y: number }[]) => Promise<void>;
   deleteNode: (id: string) => Promise<void>;
   deleteEdge: (id: string) => Promise<void>;
@@ -22,10 +22,10 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
   edges: [],
   loading: false,
 
-  fetchGraph: async () => {
+  fetchGraph: async (projectId?: string) => {
     set({ loading: true });
     try {
-      const data = await invoke<{ nodes: GraphNode[]; edges: GraphEdge[] }>('get_graph_data');
+      const data = await invoke<{ nodes: GraphNode[]; edges: GraphEdge[] }>('get_graph_data', { projectId });
       set({ nodes: data.nodes, edges: data.edges, loading: false });
     } catch (e) {
       console.error('Failed to fetch graph:', e);
@@ -33,18 +33,18 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
     }
   },
 
-  addNode: async (label, category, x = 0, y = 0) => {
+  addNode: async (label, category, x = 0, y = 0, projectId?: string) => {
     const color = NODE_CATEGORY_COLORS[category];
     const node = await invoke<GraphNode>('create_graph_node', {
-      input: { label, category, color, x, y },
+      input: { label, category, color, x, y, project_id: projectId },
     });
     set((state) => ({ nodes: [...state.nodes, node] }));
     return node;
   },
 
-  addEdge: async (sourceId, targetId, label?) => {
+  addEdge: async (sourceId, targetId, label?, projectId?) => {
     const edge = await invoke<GraphEdge>('create_graph_edge', {
-      input: { source_id: sourceId, target_id: targetId, label },
+      input: { source_id: sourceId, target_id: targetId, label, project_id: projectId },
     });
     set((state) => ({ edges: [...state.edges, edge] }));
     return edge;

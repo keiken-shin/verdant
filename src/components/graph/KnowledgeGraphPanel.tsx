@@ -15,6 +15,7 @@ import { KnowledgeGraphNode } from './KnowledgeGraphNode';
 import { useGraphStore } from '@/stores/graphStore';
 import { useUiStore } from '@/stores/uiStore';
 import { useMessageStore } from '@/stores/messageStore';
+import { useSessionStore } from '@/stores/sessionStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useProviderStore } from '@/stores/providerStore';
 import { providerRegistry } from '@/providers/registry';
@@ -33,6 +34,7 @@ export function KnowledgeGraphPanel() {
   const { nodes: storeNodes, edges: storeEdges, fetchGraph, addNode, addEdge } = useGraphStore();
   const { closeSearch, graphPanelOpen, toggleGraphPanel } = useUiStore();
   const { messagesBySession } = useMessageStore();
+  const { sessions } = useSessionStore();
   const { settings } = useSettingsStore();
   const { providers, activeModelId } = useProviderStore();
   const location = useLocation();
@@ -44,6 +46,7 @@ export function KnowledgeGraphPanel() {
   const match = location.pathname.match(/\/chat\/([^/]+)/);
   const sessionId = match ? match[1] : undefined;
   const sessionMessages = sessionId ? (messagesBySession[sessionId] || EMPTY_MESSAGES) : EMPTY_MESSAGES;
+  const projectId = sessionId ? sessions.find((s) => s.id === sessionId)?.project_id : undefined;
 
   const [width, setWidth] = useState(288); // Default w-72 = 288px
   const [logoHovered, setLogoHovered] = useState(false);
@@ -109,9 +112,11 @@ export function KnowledgeGraphPanel() {
       }
 
       const labelToId: Record<string, string> = {};
+      // Dedup within the same scope (this project, or the global graph for loose sessions).
+      const scopedNodes = storeNodes.filter((sn) => (sn.project_id || undefined) === projectId);
 
       for (const n of extractedNodes) {
-        const existingNode = storeNodes.find(
+        const existingNode = scopedNodes.find(
           (sn) => sn.label.toLowerCase() === n.label.toLowerCase()
         );
 
@@ -122,7 +127,7 @@ export function KnowledgeGraphPanel() {
           const distance = 50 + Math.random() * 150;
           const x = 300 + Math.cos(angle) * distance;
           const y = 300 + Math.sin(angle) * distance;
-          const newNode = await addNode(n.label, n.category, x, y);
+          const newNode = await addNode(n.label, n.category, x, y, projectId);
           labelToId[n.label.toLowerCase()] = newNode.id;
         }
       }
@@ -139,7 +144,7 @@ export function KnowledgeGraphPanel() {
           );
 
           if (!edgeExists) {
-            await addEdge(sourceId, targetId, e.label);
+            await addEdge(sourceId, targetId, e.label, projectId);
           }
         }
       }

@@ -5,10 +5,12 @@ import { Search, X } from 'lucide-react';
 import { useUiStore } from '@/stores/uiStore';
 import { useSessionStore } from '@/stores/sessionStore';
 import { useMemoryStore } from '@/stores/memoryStore';
+import { useProjectStore } from '@/stores/projectStore';
 import { cn, truncate } from '@/utils';
-import type { Session, Memory } from '@/types';
+import type { Session, Memory, Project } from '@/types';
 
 type SearchResult =
+  | { type: 'project'; item: Project }
   | { type: 'session'; item: Session }
   | { type: 'memory'; item: Memory };
 
@@ -16,6 +18,7 @@ export function SearchModal() {
   const { searchOpen, closeSearch } = useUiStore();
   const { sessions, searchSessions } = useSessionStore();
   const { memories, searchMemories } = useMemoryStore();
+  const { projects, searchProjects } = useProjectStore();
   const navigate = useNavigate();
 
   const [query, setQuery] = useState('');
@@ -24,24 +27,27 @@ export function SearchModal() {
 
   const runSearch = useCallback(async (q: string) => {
     if (!q.trim()) {
-      const recent = sessions.slice(0, 7).map((s) => ({ type: 'session' as const, item: s }));
-      setResults(recent);
+      const recentProjects = projects.slice(0, 3).map((p) => ({ type: 'project' as const, item: p }));
+      const recentSessions = sessions.slice(0, 5).map((s) => ({ type: 'session' as const, item: s }));
+      setResults([...recentProjects, ...recentSessions]);
       setSelectedIndex(0);
       return;
     }
 
-    const [foundSessions, foundMemories] = await Promise.all([
+    const [foundProjects, foundSessions, foundMemories] = await Promise.all([
+      searchProjects(q),
       searchSessions(q),
       searchMemories(q),
     ]);
 
     const combined: SearchResult[] = [
+      ...foundProjects.slice(0, 4).map((p) => ({ type: 'project' as const, item: p })),
       ...foundSessions.slice(0, 5).map((s) => ({ type: 'session' as const, item: s })),
       ...foundMemories.slice(0, 3).map((m) => ({ type: 'memory' as const, item: m })),
     ];
     setResults(combined);
     setSelectedIndex(0);
-  }, [sessions, searchSessions, searchMemories]);
+  }, [projects, sessions, searchProjects, searchSessions, searchMemories]);
 
   useEffect(() => {
     if (searchOpen) {
@@ -59,7 +65,9 @@ export function SearchModal() {
 
   const handleSelect = (result: SearchResult) => {
     closeSearch();
-    if (result.type === 'session') {
+    if (result.type === 'project') {
+      navigate(`/projects/${result.item.id}`);
+    } else if (result.type === 'session') {
       navigate(`/chat/${result.item.id}`);
     } else {
       navigate('/memories');
@@ -141,11 +149,20 @@ export function SearchModal() {
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium text-zinc-800 truncate">
-                      {result.type === 'session' ? result.item.title : result.item.content}
+                      {result.type === 'project'
+                        ? result.item.name
+                        : result.type === 'session'
+                        ? result.item.title
+                        : result.item.content}
                     </div>
                     {result.type === 'session' && result.item.preview && (
                       <div className="text-xs text-zinc-400 mt-0.5 italic truncate">
                         {truncate(result.item.preview, 80)}
+                      </div>
+                    )}
+                    {result.type === 'project' && result.item.description && (
+                      <div className="text-xs text-zinc-400 mt-0.5 truncate">
+                        {truncate(result.item.description, 80)}
                       </div>
                     )}
                   </div>
