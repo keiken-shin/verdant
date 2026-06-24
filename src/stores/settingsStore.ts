@@ -4,6 +4,7 @@ import type { AppSettings } from '@/types';
 
 const DEFAULT_SETTINGS: AppSettings = {
   ollama_host: 'http://127.0.0.1:11434',
+  ollama_num_ctx: 32768,
   auto_remember: true,
   show_graph_panel: true,
   anonymous_telemetry: false,
@@ -32,9 +33,11 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         const key = s.key as keyof AppSettings;
         if (key in settings) {
           const val = s.value;
-          // Parse booleans
+          // Parse booleans and numbers
           if (typeof settings[key] === 'boolean') {
             (settings as Record<string, unknown>)[key] = val === 'true';
+          } else if (typeof settings[key] === 'number') {
+            (settings as Record<string, unknown>)[key] = Number(val);
           } else {
             (settings as Record<string, unknown>)[key] = val;
           }

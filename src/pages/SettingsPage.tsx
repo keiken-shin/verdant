@@ -262,6 +262,26 @@ export function SettingsPage() {
               />
             </div>
           </div>
+          
+          {/* Context Window Setting */}
+          <div className="flex items-start justify-between mt-4">
+            <div className="flex-1 pr-8">
+              <label htmlFor="setting-ollama-num-ctx" className="block text-sm font-medium text-zinc-800 mb-0.5">
+                Ollama context window
+              </label>
+              <p className="text-sm text-zinc-500">Maximum context length for local models (default: 32768).</p>
+            </div>
+            <div className="shrink-0">
+              <input
+                id="setting-ollama-num-ctx"
+                type="number"
+                value={settings.ollama_num_ctx || ''}
+                onChange={(e) => updateSetting('ollama_num_ctx', parseInt(e.target.value) || 32768)}
+                className="px-3 py-1.5 text-sm font-mono border border-zinc-200 rounded-lg outline-none focus:border-[var(--color-verdant-primary)] transition-colors text-zinc-700 w-52"
+              />
+            </div>
+          </div>
+
           <div className="mt-2 flex items-center gap-2">
             <button
               onClick={testConnection}

@@ -52,6 +52,7 @@ pub fn export_session_json(session_id: String, db: State<Database>) -> Result<St
             model_id: row.get(3)?, provider_id: row.get(4)?,
             is_pinned: row.get::<_, i32>(5)? != 0,
             preview: row.get(6)?, created_at: row.get(7)?, updated_at: row.get(8)?,
+            project_id: None, summary: None, summary_updated_at: None,
         }),
     ).map_err(|e| e.to_string())?;
 
@@ -139,6 +140,7 @@ pub fn export_graph_json(db: State<Database>) -> Result<String, String> {
             id: row.get(0)?, label: row.get(1)?, category: row.get(2)?,
             color: row.get(3)?, x: row.get(4)?, y: row.get(5)?,
             metadata: row.get(6)?, created_at: row.get(7)?, updated_at: row.get(8)?,
+            project_id: None,
         })
     }).map_err(|e| e.to_string())?
     .collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
@@ -151,6 +153,7 @@ pub fn export_graph_json(db: State<Database>) -> Result<String, String> {
         Ok(GraphEdge {
             id: row.get(0)?, source_id: row.get(1)?, target_id: row.get(2)?,
             label: row.get(3)?, metadata: row.get(4)?, created_at: row.get(5)?,
+            project_id: None,
         })
     }).map_err(|e| e.to_string())?
     .collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;

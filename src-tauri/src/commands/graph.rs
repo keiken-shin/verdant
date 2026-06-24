@@ -12,6 +12,7 @@ pub struct GraphNode {
     pub x: f64,
     pub y: f64,
     pub metadata: String,
+    pub project_id: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -23,6 +24,7 @@ pub struct GraphEdge {
     pub target_id: String,
     pub label: Option<String>,
     pub metadata: String,
+    pub project_id: Option<String>,
     pub created_at: String,
 }
 
@@ -33,6 +35,7 @@ pub struct CreateNodeInput {
     pub color: Option<String>,
     pub x: Option<f64>,
     pub y: Option<f64>,
+    pub project_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -40,6 +43,7 @@ pub struct CreateEdgeInput {
     pub source_id: String,
     pub target_id: String,
     pub label: Option<String>,
+    pub project_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -68,15 +72,18 @@ fn category_to_color(category: &str) -> String {
     }
 }
 
+// project_id = None returns the entire graph (global /knowledge-graph page).
+// Some(id) scopes to one project's nodes/edges.
 #[tauri::command]
-pub fn get_graph_data(db: State<Database>) -> Result<GraphData, String> {
+pub fn get_graph_data(project_id: Option<String>, db: State<Database>) -> Result<GraphData, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     let mut node_stmt = conn.prepare(
-        "SELECT id, label, category, color, x, y, metadata, created_at, updated_at FROM graph_nodes"
+        "SELECT id, label, category, color, x, y, metadata, project_id, created_at, updated_at FROM graph_nodes
+         WHERE (?1 IS NULL OR project_id = ?1)"
     ).map_err(|e| e.to_string())?;
 
-    let nodes: Vec<GraphNode> = node_stmt.query_map([], |row| {
+    let nodes: Vec<GraphNode> = node_stmt.query_map(params![project_id], |row| {
         let category: String = row.get(2)?;
         let color: Option<String> = row.get(3)?;
         Ok(GraphNode {
@@ -87,24 +94,27 @@ pub fn get_graph_data(db: State<Database>) -> Result<GraphData, String> {
             x: row.get(4)?,
             y: row.get(5)?,
             metadata: row.get(6)?,
-            created_at: row.get(7)?,
-            updated_at: row.get(8)?,
+            project_id: row.get(7)?,
+            created_at: row.get(8)?,
+            updated_at: row.get(9)?,
         })
     }).map_err(|e| e.to_string())?
     .collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
 
     let mut edge_stmt = conn.prepare(
-        "SELECT id, source_id, target_id, label, metadata, created_at FROM graph_edges"
+        "SELECT id, source_id, target_id, label, metadata, project_id, created_at FROM graph_edges
+         WHERE (?1 IS NULL OR project_id = ?1)"
     ).map_err(|e| e.to_string())?;
 
-    let edges: Vec<GraphEdge> = edge_stmt.query_map([], |row| {
+    let edges: Vec<GraphEdge> = edge_stmt.query_map(params![project_id], |row| {
         Ok(GraphEdge {
             id: row.get(0)?,
             source_id: row.get(1)?,
             target_id: row.get(2)?,
             label: row.get(3)?,
             metadata: row.get(4)?,
-            created_at: row.get(5)?,
+            project_id: row.get(5)?,
+            created_at: row.get(6)?,
         })
     }).map_err(|e| e.to_string())?
     .collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
@@ -122,9 +132,9 @@ pub fn create_graph_node(input: CreateNodeInput, db: State<Database>) -> Result<
     let y = input.y.unwrap_or(0.0);
 
     conn.execute(
-        "INSERT INTO graph_nodes (id, label, category, color, x, y, metadata, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, '{}', ?7, ?8)",
-        params![id, input.label, input.category, color, x, y, now, now],
+        "INSERT INTO graph_nodes (id, label, category, color, x, y, metadata, project_id, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, '{}', ?7, ?8, ?9)",
+        params![id, input.label, input.category, color, x, y, input.project_id, now, now],
     ).map_err(|e| e.to_string())?;
 
     Ok(GraphNode {
@@ -134,6 +144,7 @@ pub fn create_graph_node(input: CreateNodeInput, db: State<Database>) -> Result<
         color: Some(color),
         x, y,
         metadata: "{}".to_string(),
+        project_id: input.project_id,
         created_at: now.clone(),
         updated_at: now,
     })
@@ -146,9 +157,9 @@ pub fn create_graph_edge(input: CreateEdgeInput, db: State<Database>) -> Result<
     let now = chrono::Utc::now().to_rfc3339();
 
     conn.execute(
-        "INSERT INTO graph_edges (id, source_id, target_id, label, metadata, created_at)
-         VALUES (?1, ?2, ?3, ?4, '{}', ?5)",
-        params![id, input.source_id, input.target_id, input.label, now],
+        "INSERT INTO graph_edges (id, source_id, target_id, label, metadata, project_id, created_at)
+         VALUES (?1, ?2, ?3, ?4, '{}', ?5, ?6)",
+        params![id, input.source_id, input.target_id, input.label, input.project_id, now],
     ).map_err(|e| e.to_string())?;
 
     Ok(GraphEdge {
@@ -157,6 +168,7 @@ pub fn create_graph_edge(input: CreateEdgeInput, db: State<Database>) -> Result<
         target_id: input.target_id,
         label: input.label,
         metadata: "{}".to_string(),
+        project_id: input.project_id,
         created_at: now,
     })
 }
