@@ -15,6 +15,7 @@ import { useGraphStore } from '@/stores/graphStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useProviderStore } from '@/stores/providerStore';
 import { useProjectStore } from '@/stores/projectStore';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 
 function App() {
   const { fetchSessions } = useSessionStore();
@@ -54,6 +55,7 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
+      <ConfirmModal />
     </BrowserRouter>
   );
 }

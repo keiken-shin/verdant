@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Network, MessageSquare, FileText, Clock, Trash2, ArrowLeft, Edit2, Check, X } from 'lucide-react';
 import { useProjectStore } from '@/stores/projectStore';
 import { cn } from '@/utils';
+import { useConfirmStore } from '@/stores/confirmStore';
 import type { Project } from '@/types';
 
 export const TABS = ['Chat', 'Files', 'Graph', 'Timeline'] as const;
@@ -39,7 +40,12 @@ export function ProjectWorkspaceHeader({ project, tab, setTab, filesCount }: Pro
   };
 
   const handleDeleteProject = async () => {
-    if (window.confirm('Delete this project? Its sessions are kept as loose chats.')) {
+    const yes = await useConfirmStore.getState().confirm({
+      title: 'Delete Project',
+      message: 'Delete this project? Its sessions are kept as loose chats.',
+      kind: 'warning',
+    });
+    if (yes) {
       navigate('/projects');
       await deleteProject(project.id);
     }

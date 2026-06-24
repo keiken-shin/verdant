@@ -23,6 +23,7 @@ import { useProviderStore } from "@/stores/providerStore";
 import { useProjectStore } from "@/stores/projectStore";
 import { useUiStore } from "@/stores/uiStore";
 import { truncate } from "@/utils";
+import { useConfirmStore } from "@/stores/confirmStore";
 
 interface NavItemProps {
   icon: React.ReactNode;
@@ -147,11 +148,12 @@ export function Sidebar() {
   };
 
   const handleDeleteSession = async (id: string) => {
-    if (
-      window.confirm(
-        "Are you sure you want to delete this session? This action cannot be undone.",
-      )
-    ) {
+    const yes = await useConfirmStore.getState().confirm({
+      title: "Delete Session",
+      message: "Are you sure you want to delete this session? This action cannot be undone.",
+      kind: "warning",
+    });
+    if (yes) {
       await deleteSession(id);
       if (path === `/chat/${id}`) {
         navigate("/");
@@ -170,11 +172,12 @@ export function Sidebar() {
   };
 
   const handleDeleteProject = async (id: string) => {
-    if (
-      window.confirm(
-        "Are you sure you want to delete this project? Its sessions are kept as loose chats.",
-      )
-    ) {
+    const yes = await useConfirmStore.getState().confirm({
+      title: "Delete Project",
+      message: "Are you sure you want to delete this project? Its sessions are kept as loose chats.",
+      kind: "warning",
+    });
+    if (yes) {
       if (path === `/projects/${id}`) {
         navigate("/projects");
       }

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useConfirmStore } from '@/stores/confirmStore';
 import { Plus, FolderKanban, Pin, Trash2, ChevronRight, Search, Pencil } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { useProjectStore } from '@/stores/projectStore';
@@ -53,7 +54,12 @@ export function ProjectsPage() {
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (window.confirm('Delete this project? Its sessions are kept as loose chats.')) {
+    const yes = await useConfirmStore.getState().confirm({
+      title: 'Delete Project',
+      message: 'Delete this project? Its sessions are kept as loose chats.',
+      kind: 'warning',
+    });
+    if (yes) {
       await deleteProject(id);
     }
   };

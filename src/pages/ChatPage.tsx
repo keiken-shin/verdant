@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useConfirmStore } from '@/stores/confirmStore';
 import { Edit2, Trash2, Check, X, FolderKanban } from 'lucide-react';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { UserMessage, AssistantMessage, StreamingMessage } from '@/components/chat/MessageBubbles';
@@ -226,7 +227,12 @@ export function ChatPage() {
 
   const handleDeleteSession = async () => {
     if (sessionId) {
-      if (window.confirm('Are you sure you want to delete this session? This action cannot be undone.')) {
+      const yes = await useConfirmStore.getState().confirm({
+        title: 'Delete Session',
+        message: 'Are you sure you want to delete this session? This action cannot be undone.',
+        kind: 'warning',
+      });
+      if (yes) {
         await deleteSession(sessionId);
         navigate('/');
       }
