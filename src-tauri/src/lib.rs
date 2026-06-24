@@ -29,6 +29,7 @@ pub fn run() {
             commands::sessions::set_session_summary,
             commands::sessions::delete_session,
             commands::sessions::search_sessions,
+            commands::sessions::fork_session,
             // Projects
             commands::projects::get_projects,
             commands::projects::get_project,

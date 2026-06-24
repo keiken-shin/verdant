@@ -14,6 +14,7 @@ interface SessionStore {
   updateSession: (id: string, data: Partial<Session>) => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
   searchSessions: (query: string) => Promise<Session[]>;
+  forkSession: (sessionId: string, messageIds: string[]) => Promise<string>;
 }
 
 export const useSessionStore = create<SessionStore>((set, get) => ({
@@ -72,5 +73,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   searchSessions: async (query) => {
     if (!query.trim()) return get().sessions;
     return await invoke<Session[]>('search_sessions', { query });
+  },
+
+  forkSession: async (sessionId, messageIds) => {
+    const newSession = await invoke<Session>('fork_session', {
+      input: { session_id: sessionId, message_ids: messageIds },
+    });
+    set((state) => ({ sessions: [newSession, ...state.sessions] }));
+    return newSession.id;
   },
 }));

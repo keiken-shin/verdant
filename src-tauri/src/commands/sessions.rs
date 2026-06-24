@@ -37,6 +37,12 @@ pub struct UpdateSessionInput {
     pub project_id: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ForkSessionInput {
+    pub session_id: String,
+    pub message_ids: Vec<String>,
+}
+
 // Shared column list + row mapper so every SELECT stays in sync with the struct.
 const SESSION_COLS: &str = "id, title, tag, model_id, provider_id, is_pinned, preview, project_id, summary, summary_updated_at, created_at, updated_at";
 
@@ -183,4 +189,78 @@ pub fn search_sessions(query: String, db: State<Database>) -> Result<Vec<Session
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
     let sessions = stmt.query_map(params![pattern], map_session).map_err(|e| e.to_string())?;
     sessions.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn fork_session(input: ForkSessionInput, db: State<Database>) -> Result<Session, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    
+    // 1. Get original session
+    let sql = format!("SELECT {SESSION_COLS} FROM sessions WHERE id = ?1");
+    let orig_session: Session = conn.query_row(&sql, params![input.session_id], map_session)
+        .map_err(|e| format!("Failed to find original session: {}", e))?;
+
+    // 2. Create new session
+    let new_session_id = uuid::Uuid::new_v4().to_string();
+    let now = chrono::Utc::now().to_rfc3339();
+    let new_title = format!("{} (Branch)", orig_session.title);
+
+    conn.execute(
+        "INSERT INTO sessions (id, title, tag, model_id, provider_id, project_id, is_pinned, preview, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, ?7, ?8, ?9)",
+        params![
+            new_session_id, new_title, orig_session.tag, orig_session.model_id, orig_session.provider_id, 
+            orig_session.project_id, orig_session.preview, now, now
+        ],
+    ).map_err(|e| e.to_string())?;
+
+    // 3. Clone messages
+    // The frontend guarantees message_ids is in topological order (root to leaf).
+    // We map old_id -> new_id to rewrite parent_ids.
+    let mut id_map = std::collections::HashMap::new();
+
+    let mut select_stmt = conn.prepare(
+        "SELECT role, content, model_id, created_at, sort_order, parent_id FROM messages WHERE id = ?1"
+    ).map_err(|e| e.to_string())?;
+
+    let mut insert_stmt = conn.prepare(
+        "INSERT INTO messages (id, session_id, role, content, model_id, created_at, sort_order, parent_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"
+    ).map_err(|e| e.to_string())?;
+
+    for old_id in input.message_ids {
+        let mut rows = select_stmt.query(params![old_id]).map_err(|e| e.to_string())?;
+        if let Some(row) = rows.next().map_err(|e| e.to_string())? {
+            let new_msg_id = uuid::Uuid::new_v4().to_string();
+            let role: String = row.get(0).unwrap();
+            let content: String = row.get(1).unwrap();
+            let model_id: Option<String> = row.get(2).unwrap();
+            let created_at: String = row.get(3).unwrap();
+            let sort_order: i64 = row.get(4).unwrap();
+            let old_parent_id: Option<String> = row.get(5).unwrap();
+
+            let new_parent_id = old_parent_id.and_then(|p| id_map.get(&p).cloned());
+
+            insert_stmt.execute(params![
+                new_msg_id, new_session_id, role, content, model_id, created_at, sort_order, new_parent_id
+            ]).map_err(|e| e.to_string())?;
+
+            id_map.insert(old_id, new_msg_id);
+        }
+    }
+
+    Ok(Session {
+        id: new_session_id,
+        title: new_title,
+        tag: orig_session.tag,
+        model_id: orig_session.model_id,
+        provider_id: orig_session.provider_id,
+        is_pinned: false,
+        preview: orig_session.preview,
+        project_id: orig_session.project_id,
+        summary: None,
+        summary_updated_at: None,
+        created_at: now.clone(),
+        updated_at: now,
+    })
 }

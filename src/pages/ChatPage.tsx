@@ -60,7 +60,7 @@ export function ChatPage() {
   const location = useLocation();
 
   const { sessions, createSession, updateSession, deleteSession } = useSessionStore();
-  const { messagesBySession, activeVariantIds, setActiveVariant, streamingContent, isStreaming, fetchMessages, addMessage, setIsStreaming, setStreamingContent, appendStreamingContent, setAbortController, stopStreaming } = useMessageStore();
+  const { messagesBySession, activeVariantIds, setActiveVariant, streamingContent, isStreaming, streamingSessionId, fetchMessages, addMessage, setIsStreaming, setStreamingSessionId, setStreamingContent, appendStreamingContent, setAbortController, stopStreaming } = useMessageStore();
   const { providers, activeModelId, setActiveModel } = useProviderStore();
   const { settings } = useSettingsStore();
   const { projects, filesByProject, fetchProjectFiles } = useProjectStore();
@@ -228,6 +228,7 @@ export function ChatPage() {
     const abortCtrl = new AbortController();
     setAbortController(abortCtrl);
     setIsStreaming(true);
+    setStreamingSessionId(sid);
     setStreamingParentId(userMsg.id);
     setStreamingContent('');
 
@@ -246,17 +247,18 @@ export function ChatPage() {
         await addMessage(sid, 'assistant', finalContent, activeModelId || undefined, userMsg.id);
       }
     } catch (e: unknown) {
-      if (e instanceof Error && e.name !== 'AbortError') {
-        const errorMsg = `Error: ${e instanceof Error ? e.message : 'Failed to get response'}`;
+      if (e instanceof Error ? e.name !== 'AbortError' : true) {
+        const errorMsg = `Error: ${e instanceof Error ? e.message : (typeof e === 'string' ? e : 'Failed to get response')}`;
         await addMessage(sid, 'assistant', errorMsg, activeModelId || undefined, userMsg.id);
       }
     } finally {
       setIsStreaming(false);
+      setStreamingSessionId(null);
       setStreamingParentId(null);
       setStreamingContent('');
       setAbortController(null);
     }
-  }, [activeModelId, sessionId, providers, settings.ollama_host, settings.extraction_model, createSession, updateSession, addMessage, fetchProjectFiles, setAbortController, setIsStreaming, setStreamingContent, appendStreamingContent, navigate]);
+  }, [activeModelId, sessionId, providers, settings.ollama_host, settings.extraction_model, createSession, updateSession, addMessage, fetchProjectFiles, setAbortController, setIsStreaming, setStreamingContent, appendStreamingContent, navigate, setStreamingSessionId]);
 
   // Auto-send an initial prompt passed from the project workspace (one-shot).
   // Gated on activeModelId: on a cold start models may still be loading, and
@@ -289,6 +291,7 @@ export function ChatPage() {
       
       // We know `handleSend` adds a user message. We don't want that.
       setIsStreaming(true);
+      setStreamingSessionId(sessionId);
       setStreamingParentId(parentMsg.id);
       setStreamingContent('');
       const abortCtrl = new AbortController();
@@ -345,6 +348,7 @@ export function ChatPage() {
         }
       } finally {
         setIsStreaming(false);
+        setStreamingSessionId(null);
         setStreamingParentId(null);
         setStreamingContent('');
         setAbortController(null);
@@ -353,10 +357,37 @@ export function ChatPage() {
   }, [sessionId, activePath, messages, providers, settings.ollama_host, settings.extraction_model, activeModelId, setIsStreaming, setStreamingContent, setAbortController, appendStreamingContent, addMessage]);
 
   const handleEditMessage = useCallback(async (id: string, content: string) => {
-    // Edit message and re-run from that point
-    await useMessageStore.getState().updateMessage(id, content);
-    // Re-trigger conversation from that message
-  }, []);
+    const msg = messages.find(m => m.id === id);
+    if (!msg) return;
+
+    let parentId = msg.parent_id;
+    if (!parentId) {
+      // Fallback for legacy linear messages: the parent is the preceding message
+      const sorted = [...messages].sort((a, b) => a.sort_order - b.sort_order);
+      const idx = sorted.findIndex(m => m.id === id);
+      if (idx > 0) parentId = sorted[idx - 1].id;
+    }
+
+    // Instead of overwriting, we branch out by sending a new prompt with the same parent
+    await handleSend(content, parentId);
+  }, [messages, handleSend]);
+
+  const handleFork = useCallback(async (messageId: string) => {
+    if (!sessionId) return;
+    
+    // Find the active path up to this message
+    const msgIndex = activePath.findIndex(m => m.id === messageId);
+    if (msgIndex === -1) return;
+
+    const messagesToFork = activePath.slice(0, msgIndex + 1).map(m => m.id);
+    
+    try {
+      const newSessionId = await useSessionStore.getState().forkSession(sessionId, messagesToFork);
+      navigate(`/chat/${newSessionId}`);
+    } catch (e) {
+      console.error('Failed to fork session:', e);
+    }
+  }, [sessionId, activePath, navigate]);
 
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [tempTitle, setTempTitle] = useState('');
@@ -503,10 +534,10 @@ export function ChatPage() {
           <div className="px-8 py-8 max-w-3xl mx-auto w-full">
             {activePath
               .filter(msg => {
-                // If we are currently streaming a new response for a parent,
+                // If we are currently streaming a new response for a parent IN THIS SESSION,
                 // hide the existing children (variants) of that parent so they don't
                 // show up above the streaming message.
-                if (isStreaming && streamingParentId) {
+                if (isStreaming && streamingSessionId === sessionId && streamingParentId) {
                   // Hide if this message is an assistant response to the streaming parent
                   const parentId = msg.parent_id || (messages.indexOf(msg) > 0 ? messages[messages.indexOf(msg) - 1].id : null);
                   if (parentId === streamingParentId && msg.role === 'assistant') {
@@ -547,10 +578,11 @@ export function ChatPage() {
                   variantIndex={variantIndex >= 0 ? variantIndex : undefined}
                   totalVariants={totalVariants > 0 ? totalVariants : undefined}
                   onSwitchVariant={handleSwitchVariant}
+                  onFork={() => handleFork(msg.id)}
                 />
               );
             })}
-            {isStreaming && <StreamingMessage content={streamingContent} />}
+            {isStreaming && streamingSessionId === sessionId && <StreamingMessage content={streamingContent} />}
             <div ref={messagesEndRef} />
           </div>
         )}
@@ -561,7 +593,7 @@ export function ChatPage() {
         <ChatInput
           onSend={handleSend}
           onStop={stopStreaming}
-          isStreaming={isStreaming}
+          isStreaming={isStreaming && streamingSessionId === sessionId}
           models={models}
           selectedModelId={activeModelId}
           onModelChange={setActiveModel}
