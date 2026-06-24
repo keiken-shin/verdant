@@ -1,7 +1,66 @@
 import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import { Copy, RotateCcw, Edit2, Check, ChevronDown, ChevronUp, Brain, GitBranch } from 'lucide-react';
+
+const MarkdownRenderer = ({ content }: { content: string }) => {
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm, remarkMath]}
+      rehypePlugins={[rehypeKatex]}
+      components={{
+        code: ({ className, children, ...props }) => {
+          const isBlock = className?.includes('language-');
+          return isBlock ? (
+            <div className="relative my-3">
+              <pre className="bg-zinc-950 text-zinc-100 rounded-lg px-4 py-3 overflow-x-auto text-xs font-mono leading-relaxed">
+                <code>{children}</code>
+              </pre>
+              <button
+                onClick={() => navigator.clipboard.writeText(String(children))}
+                className="absolute top-2 right-2 p-1.5 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
+                aria-label="Copy code"
+                title="Copy code"
+              >
+                <Copy className="h-4 w-4" />
+              </button>
+            </div>
+          ) : (
+            <code className="px-1.5 py-0.5 bg-zinc-100 text-zinc-800 rounded text-xs font-mono" {...props}>
+              {children}
+            </code>
+          );
+        },
+        p: ({ children }) => <p className="mb-3 last:mb-0 leading-relaxed">{children}</p>,
+        ul: ({ children }) => <ul className="list-disc list-inside mb-3 space-y-1">{children}</ul>,
+        ol: ({ children }) => <ol className="list-decimal list-inside mb-3 space-y-1">{children}</ol>,
+        li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+        h1: ({ children }) => <h1 className="text-xl font-bold mb-3 text-zinc-900">{children}</h1>,
+        h2: ({ children }) => <h2 className="text-lg font-semibold mb-2 text-zinc-900">{children}</h2>,
+        h3: ({ children }) => <h3 className="text-base font-semibold mb-2 text-zinc-900">{children}</h3>,
+        blockquote: ({ children }) => (
+          <blockquote className="border-l-2 border-zinc-200 pl-4 my-3 text-zinc-500 italic">{children}</blockquote>
+        ),
+        a: ({ href, children }) => (
+          <a href={href} className="text-[var(--color-verdant-primary)] underline underline-offset-2 hover:opacity-80" target="_blank" rel="noreferrer">{children}</a>
+        ),
+        hr: () => <hr className="border-zinc-100 my-4" />,
+        table: ({ children }) => (
+          <div className="overflow-x-auto my-3">
+            <table className="min-w-full text-xs border-collapse border border-zinc-200 rounded">{children}</table>
+          </div>
+        ),
+        th: ({ children }) => <th className="px-3 py-2 bg-zinc-50 border border-zinc-200 font-medium text-left">{children}</th>,
+        td: ({ children }) => <td className="px-3 py-2 border border-zinc-200">{children}</td>,
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  );
+};
 import { cn, parseThinking } from '@/utils';
 import type { Message } from '@/types';
 
@@ -61,10 +120,11 @@ export function UserMessage({ message, onEdit, variantIndex, totalVariants, onSw
               {onEdit && (
                 <button
                   onClick={() => setEditing(true)}
-                  className="text-zinc-400 hover:text-zinc-600 p-0.5"
+                  className="text-zinc-400 hover:text-zinc-600 p-1"
                   aria-label="Edit message"
+                  title="Edit message"
                 >
-                  <Edit2 className="h-3 w-3" />
+                  <Edit2 className="h-4 w-4" />
                 </button>
               )}
             </div>
@@ -118,92 +178,45 @@ export function AssistantMessage({ message, onCopy, onRegenerate, onFork, isLast
             )}
           </button>
           {thinkingExpanded && (
-            <div className="mt-2 text-xs text-zinc-500 border-t border-zinc-200/50 pt-2 leading-relaxed font-mono whitespace-pre-wrap">
-              {thinking}
+            <div className="mt-2 text-xs text-zinc-500 border-t border-zinc-200/50 pt-2 leading-relaxed">
+              <MarkdownRenderer content={thinking} />
             </div>
           )}
         </div>
       )}
 
       <div className="prose prose-sm max-w-none text-zinc-700">
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          components={{
-            code: ({ className, children, ...props }) => {
-              const isBlock = className?.includes('language-');
-              return isBlock ? (
-                <div className="relative my-3">
-                  <pre className="bg-zinc-950 text-zinc-100 rounded-lg px-4 py-3 overflow-x-auto text-xs font-mono leading-relaxed">
-                    <code>{children}</code>
-                  </pre>
-                  <button
-                    onClick={() => navigator.clipboard.writeText(String(children))}
-                    className="absolute top-2 right-2 p-1.5 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
-                    aria-label="Copy code"
-                  >
-                    <Copy className="h-3 w-3" />
-                  </button>
-                </div>
-              ) : (
-                <code className="px-1.5 py-0.5 bg-zinc-100 text-zinc-800 rounded text-xs font-mono" {...props}>
-                  {children}
-                </code>
-              );
-            },
-            p: ({ children }) => <p className="mb-3 last:mb-0 leading-relaxed">{children}</p>,
-            ul: ({ children }) => <ul className="list-disc list-inside mb-3 space-y-1">{children}</ul>,
-            ol: ({ children }) => <ol className="list-decimal list-inside mb-3 space-y-1">{children}</ol>,
-            li: ({ children }) => <li className="leading-relaxed">{children}</li>,
-            h1: ({ children }) => <h1 className="text-xl font-bold mb-3 text-zinc-900">{children}</h1>,
-            h2: ({ children }) => <h2 className="text-lg font-semibold mb-2 text-zinc-900">{children}</h2>,
-            h3: ({ children }) => <h3 className="text-base font-semibold mb-2 text-zinc-900">{children}</h3>,
-            blockquote: ({ children }) => (
-              <blockquote className="border-l-2 border-zinc-200 pl-4 my-3 text-zinc-500 italic">{children}</blockquote>
-            ),
-            a: ({ href, children }) => (
-              <a href={href} className="text-[var(--color-verdant-primary)] underline underline-offset-2 hover:opacity-80" target="_blank" rel="noreferrer">{children}</a>
-            ),
-            hr: () => <hr className="border-zinc-100 my-4" />,
-            table: ({ children }) => (
-              <div className="overflow-x-auto my-3">
-                <table className="min-w-full text-xs border-collapse border border-zinc-200 rounded">{children}</table>
-              </div>
-            ),
-            th: ({ children }) => <th className="px-3 py-2 bg-zinc-50 border border-zinc-200 font-medium text-left">{children}</th>,
-            td: ({ children }) => <td className="px-3 py-2 border border-zinc-200">{children}</td>,
-          }}
-        >
-          {mainContent}
-        </ReactMarkdown>
+        <MarkdownRenderer content={mainContent} />
       </div>
 
       {/* Action buttons */}
       <div className="flex items-center gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
         <button
           onClick={handleCopy}
-          className="flex items-center gap-1 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded transition-colors"
+          className="flex items-center justify-center p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded transition-colors"
           aria-label="Copy response"
+          title="Copy response"
         >
-          {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-          <span>{copied ? 'Copied' : 'Copy'}</span>
+          {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
         </button>
         {isLast && onRegenerate && (
           <button
             onClick={onRegenerate}
-            className="flex items-center gap-1 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded transition-colors"
+            className="flex items-center justify-center p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded transition-colors"
             aria-label="Regenerate response"
+            title="Regenerate response"
           >
-            <RotateCcw className="h-3 w-3" />
-            <span>Regenerate</span>
+            <RotateCcw className="h-4 w-4" />
           </button>
         )}
         {onFork && (
           <button
             onClick={onFork}
-            className="flex items-center gap-1 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded transition-colors"
+            className="flex items-center justify-center p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded transition-colors"
+            aria-label="Branch to new session"
             title="Branch to new session"
           >
-            <GitBranch className="h-3 w-3" />
+            <GitBranch className="h-4 w-4" />
           </button>
         )}
         
@@ -263,11 +276,8 @@ export function StreamingMessage({ content }: StreamingMessageProps) {
             )}
           </button>
           {thinkingExpanded && (
-            <div className="mt-2 text-xs text-zinc-500 border-t border-zinc-200/50 pt-2 leading-relaxed font-mono whitespace-pre-wrap">
-              {thinking}
-              {isThinking && (
-                <span className="inline-block h-3 w-1.5 ml-1 bg-zinc-400 animate-pulse" />
-              )}
+            <div className="mt-2 text-xs text-zinc-500 border-t border-zinc-200/50 pt-2 leading-relaxed">
+              <MarkdownRenderer content={thinking + (isThinking ? ' █' : '')} />
             </div>
           )}
         </div>
@@ -275,9 +285,7 @@ export function StreamingMessage({ content }: StreamingMessageProps) {
 
       <div className="prose prose-sm max-w-none text-zinc-700">
         {mainContent ? (
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-            {mainContent}
-          </ReactMarkdown>
+          <MarkdownRenderer content={mainContent} />
         ) : (
           !isThinking && (
             <div className="flex gap-1 items-center h-5">
