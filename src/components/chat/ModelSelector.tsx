@@ -8,9 +8,10 @@ interface ModelSelectorProps {
   selectedModelId: string | null;
   onSelect: (modelId: string) => void;
   loading?: boolean;
+  direction?: 'up' | 'down';
 }
 
-export function ModelSelector({ models, selectedModelId, onSelect, loading }: ModelSelectorProps) {
+export function ModelSelector({ models, selectedModelId, onSelect, loading, direction = 'up' }: ModelSelectorProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -43,7 +44,10 @@ export function ModelSelector({ models, selectedModelId, onSelect, loading }: Mo
       </button>
 
       {open && (
-        <div className="absolute bottom-full left-0 mb-1 w-52 bg-white rounded-lg shadow-lg border border-zinc-200 py-1 z-50 max-h-56 overflow-y-auto">
+        <div className={cn(
+          "absolute left-0 w-52 bg-white rounded-lg shadow-lg border border-zinc-200 py-1 z-50 max-h-56 overflow-y-auto",
+          direction === 'up' ? "bottom-full mb-1" : "top-full mt-1"
+        )}>
           {models.length === 0 ? (
             <div className="px-3 py-2 text-xs text-zinc-400">
               No models available. Start Ollama and pull a model.
