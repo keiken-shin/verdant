@@ -7,6 +7,7 @@ interface MessageStore {
   activeVariantIds: Record<string, Record<string, string>>; // session_id -> { parent_id -> selected_child_id }
   streamingContent: string;
   isStreaming: boolean;
+  streamingSessionId: string | null;
   abortController: AbortController | null;
 
   fetchMessages: (sessionId: string) => Promise<void>;
@@ -17,6 +18,7 @@ interface MessageStore {
   setStreamingContent: (content: string) => void;
   appendStreamingContent: (chunk: string) => void;
   setIsStreaming: (v: boolean) => void;
+  setStreamingSessionId: (id: string | null) => void;
   setAbortController: (ctrl: AbortController | null) => void;
   stopStreaming: () => void;
   clearMessages: (sessionId: string) => void;
@@ -27,6 +29,7 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
   activeVariantIds: {},
   streamingContent: '',
   isStreaming: false,
+  streamingSessionId: null,
   abortController: null,
 
   fetchMessages: async (sessionId) => {
@@ -100,12 +103,13 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
   setStreamingContent: (content) => set({ streamingContent: content }),
   appendStreamingContent: (chunk) => set((state) => ({ streamingContent: state.streamingContent + chunk })),
   setIsStreaming: (v) => set({ isStreaming: v }),
+  setStreamingSessionId: (id) => set({ streamingSessionId: id }),
   setAbortController: (ctrl) => set({ abortController: ctrl }),
 
   stopStreaming: () => {
     const { abortController } = get();
     if (abortController) abortController.abort();
-    set({ isStreaming: false, abortController: null });
+    set({ isStreaming: false, streamingSessionId: null, abortController: null });
   },
 
   clearMessages: (sessionId) => {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Copy, RotateCcw, Edit2, Check, ChevronDown, ChevronUp, Brain } from 'lucide-react';
+import { Copy, RotateCcw, Edit2, Check, ChevronDown, ChevronUp, Brain, GitBranch } from 'lucide-react';
 import { cn, parseThinking } from '@/utils';
 import type { Message } from '@/types';
 
@@ -57,15 +57,17 @@ export function UserMessage({ message, onEdit, variantIndex, totalVariants, onSw
             <div className="bg-zinc-100 rounded-2xl rounded-tr-sm px-4 py-3 text-sm text-zinc-800 leading-relaxed whitespace-pre-wrap">
               {message.content}
             </div>
-            {onEdit && (
-              <button
-                onClick={() => setEditing(true)}
-                className="absolute -bottom-5 right-0 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 hover:text-zinc-600"
-                aria-label="Edit message"
-              >
-                <Edit2 className="h-3 w-3" />
-              </button>
-            )}
+            <div className="absolute -bottom-5 right-0 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+              {onEdit && (
+                <button
+                  onClick={() => setEditing(true)}
+                  className="text-zinc-400 hover:text-zinc-600 p-0.5"
+                  aria-label="Edit message"
+                >
+                  <Edit2 className="h-3 w-3" />
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -77,13 +79,14 @@ interface AssistantMessageProps {
   message: Message;
   onCopy?: () => void;
   onRegenerate?: () => void;
+  onFork?: () => void;
   isLast?: boolean;
   variantIndex?: number;
   totalVariants?: number;
   onSwitchVariant?: (direction: 'prev' | 'next') => void;
 }
 
-export function AssistantMessage({ message, onCopy, onRegenerate, isLast, variantIndex, totalVariants, onSwitchVariant }: AssistantMessageProps) {
+export function AssistantMessage({ message, onCopy, onRegenerate, onFork, isLast, variantIndex, totalVariants, onSwitchVariant }: AssistantMessageProps) {
   const [copied, setCopied] = useState(false);
   const [thinkingExpanded, setThinkingExpanded] = useState(false);
 
@@ -192,6 +195,15 @@ export function AssistantMessage({ message, onCopy, onRegenerate, isLast, varian
           >
             <RotateCcw className="h-3 w-3" />
             <span>Regenerate</span>
+          </button>
+        )}
+        {onFork && (
+          <button
+            onClick={onFork}
+            className="flex items-center gap-1 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded transition-colors"
+            title="Branch to new session"
+          >
+            <GitBranch className="h-3 w-3" />
           </button>
         )}
         
