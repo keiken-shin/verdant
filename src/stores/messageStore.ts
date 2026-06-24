@@ -4,12 +4,14 @@ import type { Message } from '@/types';
 
 interface MessageStore {
   messagesBySession: Record<string, Message[]>;
+  activeVariantIds: Record<string, Record<string, string>>; // session_id -> { parent_id -> selected_child_id }
   streamingContent: string;
   isStreaming: boolean;
   abortController: AbortController | null;
 
   fetchMessages: (sessionId: string) => Promise<void>;
-  addMessage: (sessionId: string, role: 'user' | 'assistant' | 'system', content: string, modelId?: string) => Promise<Message>;
+  addMessage: (sessionId: string, role: 'user' | 'assistant' | 'system', content: string, modelId?: string, parentId?: string | null) => Promise<Message>;
+  setActiveVariant: (sessionId: string, parentId: string, childId: string) => void;
   updateMessage: (id: string, content: string) => Promise<void>;
   deleteMessage: (id: string, sessionId: string) => Promise<void>;
   setStreamingContent: (content: string) => void;
@@ -22,6 +24,7 @@ interface MessageStore {
 
 export const useMessageStore = create<MessageStore>((set, get) => ({
   messagesBySession: {},
+  activeVariantIds: {},
   streamingContent: '',
   isStreaming: false,
   abortController: null,
@@ -33,17 +36,44 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
     }));
   },
 
-  addMessage: async (sessionId, role, content, modelId) => {
+  addMessage: async (sessionId, role, content, modelId, parentId) => {
     const msg = await invoke<Message>('create_message', {
-      input: { session_id: sessionId, role, content, model_id: modelId },
+      input: { session_id: sessionId, role, content, model_id: modelId, parent_id: parentId },
     });
+    set((state) => {
+      // If we are adding a variant (it shares a parent with existing messages),
+      // we auto-select the newly added message as the active variant.
+      let newActiveVariants = state.activeVariantIds;
+      if (parentId) {
+        newActiveVariants = {
+          ...state.activeVariantIds,
+          [sessionId]: {
+            ...(state.activeVariantIds[sessionId] || {}),
+            [parentId]: msg.id,
+          },
+        };
+      }
+      return {
+        messagesBySession: {
+          ...state.messagesBySession,
+          [sessionId]: [...(state.messagesBySession[sessionId] || []), msg],
+        },
+        activeVariantIds: newActiveVariants,
+      };
+    });
+    return msg;
+  },
+
+  setActiveVariant: (sessionId, parentId, childId) => {
     set((state) => ({
-      messagesBySession: {
-        ...state.messagesBySession,
-        [sessionId]: [...(state.messagesBySession[sessionId] || []), msg],
+      activeVariantIds: {
+        ...state.activeVariantIds,
+        [sessionId]: {
+          ...(state.activeVariantIds[sessionId] || {}),
+          [parentId]: childId,
+        },
       },
     }));
-    return msg;
   },
 
   updateMessage: async (id, content) => {

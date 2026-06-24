@@ -12,6 +12,7 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { buildProjectContext } from '@/services/sessionContext';
 import { useModels } from '@/hooks/useModels';
+import type { Message } from '@/types';
 
 import { providerRegistry } from '@/providers/registry';
 
@@ -59,11 +60,13 @@ export function ChatPage() {
   const location = useLocation();
 
   const { sessions, createSession, updateSession, deleteSession } = useSessionStore();
-  const { messagesBySession, streamingContent, isStreaming, fetchMessages, addMessage, setIsStreaming, setStreamingContent, appendStreamingContent, setAbortController, stopStreaming } = useMessageStore();
+  const { messagesBySession, activeVariantIds, setActiveVariant, streamingContent, isStreaming, fetchMessages, addMessage, setIsStreaming, setStreamingContent, appendStreamingContent, setAbortController, stopStreaming } = useMessageStore();
   const { providers, activeModelId, setActiveModel } = useProviderStore();
   const { settings } = useSettingsStore();
   const { projects, filesByProject, fetchProjectFiles } = useProjectStore();
   const { models, modelsLoading } = useModels();
+
+  const [streamingParentId, setStreamingParentId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const sentInitialRef = useRef<string | null>(null);
@@ -81,12 +84,56 @@ export function ChatPage() {
     }
   }, [sessionId, fetchMessages, messagesBySession]);
 
+  // Build tree and active path
+  const sessionVariants = sessionId ? (activeVariantIds[sessionId] || {}) : {};
+  const { activePath, variantsMap } = React.useMemo(() => {
+    if (!messages.length) return { activePath: [], variantsMap: {} };
+
+    const vMap: Record<string, Message[]> = {};
+    const roots: Message[] = [];
+    const sorted = [...messages].sort((a, b) => a.sort_order - b.sort_order);
+    
+    for (let i = 0; i < sorted.length; i++) {
+      const msg = sorted[i];
+      let parentId = msg.parent_id;
+      if (!parentId && i > 0) parentId = sorted[i - 1].id;
+
+      if (!parentId) {
+        roots.push(msg);
+      } else {
+        if (!vMap[parentId]) vMap[parentId] = [];
+        vMap[parentId].push(msg);
+      }
+    }
+
+    const path: Message[] = [];
+    let currentId: string | null = roots.length > 0 ? roots[roots.length - 1].id : null;
+
+    while (currentId) {
+      const currentMsg = sorted.find(m => m.id === currentId);
+      if (!currentMsg) break;
+      path.push(currentMsg);
+
+      const children = vMap[currentId];
+      if (!children || children.length === 0) break;
+
+      const selectedId = sessionVariants[currentId];
+      if (selectedId && children.some(c => c.id === selectedId)) {
+        currentId = selectedId;
+      } else {
+        currentId = children[children.length - 1].id;
+      }
+    }
+
+    return { activePath: path, variantsMap: vMap };
+  }, [messages, sessionVariants]);
+
   // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, streamingContent]);
+  }, [activePath, streamingContent]);
 
-  const handleSend = useCallback(async (content: string) => {
+  const handleSend = useCallback(async (content: string, overrideParentId?: string) => {
     if (!activeModelId) return;
 
     let sid = sessionId;
@@ -98,10 +145,31 @@ export function ChatPage() {
       navigate(`/chat/${sid}`, { replace: true });
     }
 
-    // Add user message
-    await addMessage(sid, 'user', content);
+    // Add user message. Parent is either the override, or the last active message
+    let parentId = overrideParentId;
+    if (!parentId) {
+      const state = useMessageStore.getState();
+      const currentMsgs = state.messagesBySession[sid] || [];
+      // Re-compute active path to get the absolute latest leaf
+      let lastId: string | undefined;
+      if (currentMsgs.length > 0) {
+        const sorted = [...currentMsgs].sort((a, b) => a.sort_order - b.sort_order);
+        let curr = sorted[0].id;
+        while (curr) {
+          lastId = curr;
+          const children = sorted.filter(m => (m.parent_id || null) === curr || (!m.parent_id && sorted.indexOf(m) === sorted.findIndex(x=>x.id===curr)+1));
+          if (children.length === 0) break;
+          const variants = state.activeVariantIds[sid] || {};
+          const selectedId = variants[curr];
+          if (selectedId && children.some(c => c.id === selectedId)) curr = selectedId;
+          else curr = children[children.length - 1].id;
+        }
+      }
+      parentId = lastId;
+    }
+    const userMsg = await addMessage(sid, 'user', content, activeModelId || undefined, parentId);
 
-    // Get the most up-to-date messages from the store to avoid stale closure values
+    // Get the most up-to-date messages from the store
     const currentMessages = useMessageStore.getState().messagesBySession[sid] || [];
 
     // Update session title from first message
@@ -110,8 +178,19 @@ export function ChatPage() {
       await updateSession(sid, { title, model_id: activeModelId });
     }
 
-    // Get messages for context
-    const history = [...currentMessages].map((m) => ({
+    // Recompute path up to userMsg for context
+    const sorted = [...currentMessages].sort((a, b) => a.sort_order - b.sort_order);
+    const historyPath: Message[] = [];
+    let tracer: string | null | undefined = userMsg.id;
+    while (tracer) {
+      const msg = sorted.find(m => m.id === tracer);
+      if (!msg) break;
+      historyPath.unshift(msg);
+      tracer = msg.parent_id;
+      if (!tracer && sorted.indexOf(msg) > 0) tracer = sorted[sorted.indexOf(msg) - 1].id; // legacy fallback
+    }
+
+    const history = historyPath.map((m) => ({
       role: m.role as 'user' | 'assistant' | 'system',
       content: m.content,
     }));
@@ -149,6 +228,7 @@ export function ChatPage() {
     const abortCtrl = new AbortController();
     setAbortController(abortCtrl);
     setIsStreaming(true);
+    setStreamingParentId(userMsg.id);
     setStreamingContent('');
 
     try {
@@ -163,15 +243,16 @@ export function ChatPage() {
       // Finalize streaming message
       const finalContent = useMessageStore.getState().streamingContent;
       if (finalContent) {
-        await addMessage(sid, 'assistant', finalContent, activeModelId);
+        await addMessage(sid, 'assistant', finalContent, activeModelId || undefined, userMsg.id);
       }
     } catch (e: unknown) {
       if (e instanceof Error && e.name !== 'AbortError') {
         const errorMsg = `Error: ${e instanceof Error ? e.message : 'Failed to get response'}`;
-        await addMessage(sid, 'assistant', errorMsg);
+        await addMessage(sid, 'assistant', errorMsg, activeModelId || undefined, userMsg.id);
       }
     } finally {
       setIsStreaming(false);
+      setStreamingParentId(null);
       setStreamingContent('');
       setAbortController(null);
     }
@@ -191,10 +272,85 @@ export function ChatPage() {
   }, [sessionId, location.state, location.pathname, activeModelId, navigate, handleSend]);
 
   const handleRegenerate = useCallback(async () => {
-    if (!sessionId || messages.length < 2) return;
-    const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
-    if (lastUserMsg) await handleSend(lastUserMsg.content);
-  }, [sessionId, messages, handleSend]);
+    if (!sessionId || activePath.length < 2) return;
+    const lastMsg = activePath[activePath.length - 1];
+    if (lastMsg.role !== 'assistant') return;
+    
+    // The parent of the assistant message is the user message
+    const parentId = lastMsg.parent_id || (messages.length > 1 ? messages[messages.length - 2].id : undefined);
+    const parentMsg = messages.find(m => m.id === parentId);
+    
+    if (parentMsg && parentMsg.role === 'user') {
+      // Instead of sending a new prompt, we re-run the stream with the same history up to the parentMsg.
+      // But handleSend currently adds a new user message. We need a way to just generate an assistant response for an existing user message.
+      
+      // Let's refactor handleSend slightly or just replicate the stream logic here for regenerating.
+      // For now, let's call a new internal helper or inline the regenerate stream logic.
+      
+      // We know `handleSend` adds a user message. We don't want that.
+      setIsStreaming(true);
+      setStreamingParentId(parentMsg.id);
+      setStreamingContent('');
+      const abortCtrl = new AbortController();
+      setAbortController(abortCtrl);
+
+      try {
+        const sorted = [...messages].sort((a, b) => a.sort_order - b.sort_order);
+        const historyPath: Message[] = [];
+        let tracer: string | null | undefined = parentMsg.id;
+        while (tracer) {
+          const msg = sorted.find(m => m.id === tracer);
+          if (!msg) break;
+          historyPath.unshift(msg);
+          tracer = msg.parent_id;
+          if (!tracer && sorted.indexOf(msg) > 0) tracer = sorted[sorted.indexOf(msg) - 1].id;
+        }
+
+        const history = historyPath.map((m) => ({
+          role: m.role as 'user' | 'assistant' | 'system',
+          content: m.content,
+        }));
+
+        const defaultProvider = providers.find((p) => p.is_default) || providers[0];
+        if (!defaultProvider) throw new Error('No provider');
+        const ollamaEndpoint = settings.ollama_host || defaultProvider.endpoint;
+        const provider = providerRegistry.createOllama(defaultProvider.id, ollamaEndpoint);
+
+        // Fetch project context if needed
+        const currentSession = useSessionStore.getState().sessions.find(s => s.id === sessionId);
+        if (currentSession?.project_id) {
+          const proj = useProjectStore.getState().projects.find(p => p.id === currentSession.project_id);
+          if (proj) {
+            const files = useProjectStore.getState().filesByProject[proj.id] || [];
+            const systemMsg = await buildProjectContext({
+              project: proj, files, currentSessionId: sessionId, provider, modelId: settings.extraction_model || activeModelId || 'llama3'
+            });
+            if (systemMsg) history.unshift({ role: 'system', content: systemMsg });
+          }
+        }
+
+        await provider.streamChat(
+          { model: activeModelId || 'llama3', messages: history, stream: true },
+          (chunk) => { if (chunk.content) appendStreamingContent(chunk.content); },
+          abortCtrl.signal
+        );
+
+        const finalContent = useMessageStore.getState().streamingContent;
+        if (finalContent) {
+          await addMessage(sessionId, 'assistant', finalContent, activeModelId || undefined, parentMsg.id);
+        }
+      } catch (e: unknown) {
+        if (e instanceof Error && e.name !== 'AbortError') {
+          await addMessage(sessionId, 'assistant', `Error: ${e.message}`, activeModelId || undefined, parentMsg.id);
+        }
+      } finally {
+        setIsStreaming(false);
+        setStreamingParentId(null);
+        setStreamingContent('');
+        setAbortController(null);
+      }
+    }
+  }, [sessionId, activePath, messages, providers, settings.ollama_host, settings.extraction_model, activeModelId, setIsStreaming, setStreamingContent, setAbortController, appendStreamingContent, addMessage]);
 
   const handleEditMessage = useCallback(async (id: string, content: string) => {
     // Edit message and re-run from that point
@@ -345,22 +501,55 @@ export function ChatPage() {
           </div>
         ) : (
           <div className="px-8 py-8 max-w-3xl mx-auto w-full">
-            {messages.map((msg, i) =>
-              msg.role === 'user' ? (
+            {activePath
+              .filter(msg => {
+                // If we are currently streaming a new response for a parent,
+                // hide the existing children (variants) of that parent so they don't
+                // show up above the streaming message.
+                if (isStreaming && streamingParentId) {
+                  // Hide if this message is an assistant response to the streaming parent
+                  const parentId = msg.parent_id || (messages.indexOf(msg) > 0 ? messages[messages.indexOf(msg) - 1].id : null);
+                  if (parentId === streamingParentId && msg.role === 'assistant') {
+                    return false;
+                  }
+                }
+                return true;
+              })
+              .map((msg, i, filteredPath) => {
+              const parentId = msg.parent_id || (i > 0 ? filteredPath[i - 1].id : null);
+              const siblings = parentId ? variantsMap[parentId] || [] : [];
+              const variantIndex = siblings.findIndex(s => s.id === msg.id);
+              const totalVariants = siblings.length;
+
+              const handleSwitchVariant = (direction: 'prev' | 'next') => {
+                if (!parentId || !sessionId) return;
+                const newIndex = direction === 'prev' ? variantIndex - 1 : variantIndex + 1;
+                if (newIndex >= 0 && newIndex < totalVariants) {
+                  setActiveVariant(sessionId, parentId, siblings[newIndex].id);
+                }
+              };
+
+              return msg.role === 'user' ? (
                 <UserMessage
                   key={msg.id}
                   message={msg}
                   onEdit={handleEditMessage}
+                  variantIndex={variantIndex >= 0 ? variantIndex : undefined}
+                  totalVariants={totalVariants > 0 ? totalVariants : undefined}
+                  onSwitchVariant={handleSwitchVariant}
                 />
               ) : (
                 <AssistantMessage
                   key={msg.id}
                   message={msg}
-                  isLast={i === messages.length - 1}
+                  isLast={i === filteredPath.length - 1}
                   onRegenerate={handleRegenerate}
+                  variantIndex={variantIndex >= 0 ? variantIndex : undefined}
+                  totalVariants={totalVariants > 0 ? totalVariants : undefined}
+                  onSwitchVariant={handleSwitchVariant}
                 />
-              )
-            )}
+              );
+            })}
             {isStreaming && <StreamingMessage content={streamingContent} />}
             <div ref={messagesEndRef} />
           </div>

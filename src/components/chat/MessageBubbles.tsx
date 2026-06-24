@@ -8,9 +8,12 @@ import type { Message } from '@/types';
 interface UserMessageProps {
   message: Message;
   onEdit?: (id: string, content: string) => void;
+  variantIndex?: number;
+  totalVariants?: number;
+  onSwitchVariant?: (direction: 'prev' | 'next') => void;
 }
 
-export function UserMessage({ message, onEdit }: UserMessageProps) {
+export function UserMessage({ message, onEdit, variantIndex, totalVariants, onSwitchVariant }: UserMessageProps) {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(message?.content || '');
 
@@ -75,9 +78,12 @@ interface AssistantMessageProps {
   onCopy?: () => void;
   onRegenerate?: () => void;
   isLast?: boolean;
+  variantIndex?: number;
+  totalVariants?: number;
+  onSwitchVariant?: (direction: 'prev' | 'next') => void;
 }
 
-export function AssistantMessage({ message, onCopy, onRegenerate, isLast }: AssistantMessageProps) {
+export function AssistantMessage({ message, onCopy, onRegenerate, isLast, variantIndex, totalVariants, onSwitchVariant }: AssistantMessageProps) {
   const [copied, setCopied] = useState(false);
   const [thinkingExpanded, setThinkingExpanded] = useState(false);
 
@@ -187,6 +193,26 @@ export function AssistantMessage({ message, onCopy, onRegenerate, isLast }: Assi
             <RotateCcw className="h-3 w-3" />
             <span>Regenerate</span>
           </button>
+        )}
+        
+        {totalVariants !== undefined && totalVariants > 1 && variantIndex !== undefined && (
+          <div className="flex items-center gap-2 ml-2 text-xs text-zinc-500 font-mono select-none">
+            <button
+              onClick={() => onSwitchVariant?.('prev')}
+              disabled={variantIndex === 0}
+              className="p-1 hover:text-zinc-800 disabled:opacity-30 disabled:hover:text-zinc-500 transition-colors"
+            >
+              {'<'}
+            </button>
+            <span>{variantIndex + 1} / {totalVariants}</span>
+            <button
+              onClick={() => onSwitchVariant?.('next')}
+              disabled={variantIndex === totalVariants - 1}
+              className="p-1 hover:text-zinc-800 disabled:opacity-30 disabled:hover:text-zinc-500 transition-colors"
+            >
+              {'>'}
+            </button>
+          </div>
         )}
       </div>
     </div>
