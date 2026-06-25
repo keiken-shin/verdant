@@ -44,6 +44,8 @@ export interface ProjectFile {
   ext?: string;
   size: number;
   object_id: string;
+  include_mode: 'inline' | 'reference' | 'summary';
+  summary?: string | null;
   created_at: string;
 }
 

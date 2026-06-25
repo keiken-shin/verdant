@@ -17,6 +17,8 @@ interface ProjectStore {
   fetchProjectFiles: (projectId: string) => Promise<void>;
   addProjectFile: (projectId: string, name: string, ext: string, size: number, objectId: string) => Promise<ProjectFile>;
   deleteProjectFile: (projectId: string, id: string) => Promise<void>;
+  updateProjectFileMode: (projectId: string, id: string, mode: 'inline' | 'reference' | 'summary') => Promise<void>;
+  updateProjectFileSummary: (projectId: string, id: string, summary: string) => Promise<void>;
 }
 
 export const useProjectStore = create<ProjectStore>((set, get) => ({
@@ -87,12 +89,53 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   },
 
   deleteProjectFile: async (projectId, id) => {
-    await invoke('delete_project_file', { id });
-    set((state) => ({
-      filesByProject: {
-        ...state.filesByProject,
-        [projectId]: (state.filesByProject[projectId] || []).filter((f) => f.id !== id),
-      },
-    }));
+    try {
+      await invoke('delete_project_file', { id });
+      set((state) => ({
+        filesByProject: {
+          ...state.filesByProject,
+          [projectId]: (state.filesByProject[projectId] || []).filter((f) => f.id !== id),
+        },
+      }));
+    } catch (e) {
+      console.error('Failed to delete file:', e);
+      throw e;
+    }
+  },
+  
+  updateProjectFileMode: async (projectId, id, mode) => {
+    try {
+      await invoke('update_project_file_mode', { id, mode });
+      set((state) => {
+        const files = state.filesByProject[projectId] || [];
+        return {
+          filesByProject: {
+            ...state.filesByProject,
+            [projectId]: files.map((f) => f.id === id ? { ...f, include_mode: mode } : f),
+          },
+        };
+      });
+    } catch (e) {
+      console.error('Failed to update file mode:', e);
+      throw e;
+    }
+  },
+
+  updateProjectFileSummary: async (projectId, id, summary) => {
+    try {
+      await invoke('update_project_file_summary', { id, summary });
+      set((state) => {
+        const files = state.filesByProject[projectId] || [];
+        return {
+          filesByProject: {
+            ...state.filesByProject,
+            [projectId]: files.map((f) => f.id === id ? { ...f, summary } : f),
+          },
+        };
+      });
+    } catch (e) {
+      console.error('Failed to update file summary:', e);
+      throw e;
+    }
   },
 }));

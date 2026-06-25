@@ -42,6 +42,27 @@ function isStale(s: Session): boolean {
   return new Date(s.summary_updated_at).getTime() < new Date(s.updated_at).getTime();
 }
 
+const FILE_SUMMARY_PROMPT = `You are a technical assistant. Summarize the following file contents for future reference.
+Provide a concise, high-level overview of what this file is, its purpose, and its key components or functions.
+Return only the summary text, no preamble or conversational filler.`;
+
+export async function summarizeFile(
+  fileText: string,
+  provider: LLMProvider,
+  modelId: string
+): Promise<string> {
+  const response = await provider.chat({
+    model: modelId,
+    messages: [
+      { role: 'system', content: FILE_SUMMARY_PROMPT },
+      { role: 'user', content: `File contents:\n\n${fileText.slice(0, 16000)}` },
+    ],
+    stream: false,
+  });
+
+  return parseThinking(response.content).content.trim();
+}
+
 /** Assemble the project system message from instructions + KB files + sibling summaries. */
 export function buildProjectSystemMessage(
   project: Project,
@@ -61,8 +82,13 @@ export function buildProjectSystemMessage(
   }
 
   const fileBlocks = files
-    .filter((f) => f.content_text?.trim())
-    .map((f) => `## File: ${f.name}\n${f.content_text!.slice(0, MAX_FILE_CHARS)}`);
+    .filter((f) => f.content_text?.trim() || f.summary?.trim())
+    .map((f) => {
+      if (f.include_mode === 'summary' && f.summary?.trim()) {
+        return `## File Summary: ${f.name}\n${f.summary}`;
+      }
+      return `## File: ${f.name}\n${f.content_text!.slice(0, MAX_FILE_CHARS)}`;
+    });
   if (fileBlocks.length) {
     parts.push(`# Knowledge base\n${fileBlocks.join('\n\n')}`);
   }
@@ -122,21 +148,23 @@ export async function buildProjectContext(opts: {
   }
 
   const filesWithContent = await Promise.all(
-    files.map(async (f) => {
-      try {
-        const text = await invoke<string>('read_object_text', { id: f.object_id });
-        return { ...f, content_text: text };
-      } catch (e) {
-        console.error(`Failed to read object ${f.object_id}:`, e);
-        return { ...f, content_text: '' };
-      }
-    })
+    files
+      .filter((f) => f.include_mode !== 'reference')
+      .map(async (f) => {
+        try {
+          const text = await invoke<string>('read_object_text', { id: f.object_id });
+          return { ...f, content_text: text };
+        } catch (e) {
+          console.error(`Failed to read object ${f.object_id}:`, e);
+          return { ...f, content_text: '' };
+        }
+      })
   );
 
   const hasContext =
     project.instructions?.trim() ||
     project.description?.trim() ||
-    filesWithContent.some((f) => f.content_text.trim()) ||
+    filesWithContent.some((f) => f.content_text?.trim() || f.summary?.trim()) ||
     summaries.length > 0;
   if (!hasContext) return null;
 
