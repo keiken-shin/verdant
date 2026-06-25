@@ -11,7 +11,7 @@ interface MessageStore {
   abortController: AbortController | null;
 
   fetchMessages: (sessionId: string) => Promise<void>;
-  addMessage: (sessionId: string, role: 'user' | 'assistant' | 'system', content: string, modelId?: string, parentId?: string | null) => Promise<Message>;
+  addMessage: (sessionId: string, role: 'user' | 'assistant' | 'system', content: string, modelId?: string, parentId?: string | null, attachments?: string) => Promise<Message>;
   setActiveVariant: (sessionId: string, parentId: string, childId: string) => void;
   updateMessage: (id: string, content: string) => Promise<void>;
   deleteMessage: (id: string, sessionId: string) => Promise<void>;
@@ -39,9 +39,9 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
     }));
   },
 
-  addMessage: async (sessionId, role, content, modelId, parentId) => {
+  addMessage: async (sessionId, role, content, modelId, parentId, attachments) => {
     const msg = await invoke<Message>('create_message', {
-      input: { session_id: sessionId, role, content, model_id: modelId, parent_id: parentId },
+      input: { session_id: sessionId, role, content, model_id: modelId, parent_id: parentId, attachments },
     });
     set((state) => {
       // If we are adding a variant (it shares a parent with existing messages),

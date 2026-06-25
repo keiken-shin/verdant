@@ -43,8 +43,15 @@ export interface ProjectFile {
   name: string;
   ext?: string;
   size: number;
-  content_text: string;
+  object_id: string;
   created_at: string;
+}
+
+export interface Attachment {
+  id: string;
+  type: 'image' | 'text';
+  name: string;
+  objectId: string;
 }
 
 export interface Message {
@@ -56,6 +63,7 @@ export interface Message {
   created_at: string;
   sort_order: number;
   parent_id?: string | null;
+  attachments?: string;
 }
 
 export interface Memory {
@@ -153,6 +161,7 @@ export interface ModelInfo {
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
+  images?: string[];
 }
 
 export interface ChatRequest {

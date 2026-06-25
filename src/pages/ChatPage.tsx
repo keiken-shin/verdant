@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { invoke } from '@tauri-apps/api/core';
 import { useConfirmStore } from '@/stores/confirmStore';
 import { Edit2, Trash2, Check, X, FolderKanban, ArrowDown } from 'lucide-react';
 import { ChatInput } from '@/components/chat/ChatInput';
@@ -154,7 +155,7 @@ export function ChatPage() {
     }
   }, [activePath.length, streamingContent, showScrollButton]);
 
-  const handleSend = useCallback(async (content: string, overrideParentId?: string) => {
+  const handleSend = useCallback(async (content: string, attachmentsStr?: string, overrideParentId?: string) => {
     if (!activeModelId) return;
 
     let sid = sessionId;
@@ -188,7 +189,7 @@ export function ChatPage() {
       }
       parentId = lastId;
     }
-    const userMsg = await addMessage(sid, 'user', content, activeModelId || undefined, parentId);
+    const userMsg = await addMessage(sid, 'user', content, activeModelId || undefined, parentId, attachmentsStr);
 
     // Get the most up-to-date messages from the store
     const currentMessages = useMessageStore.getState().messagesBySession[sid] || [];
@@ -211,9 +212,32 @@ export function ChatPage() {
       if (!tracer && sorted.indexOf(msg) > 0) tracer = sorted[sorted.indexOf(msg) - 1].id; // legacy fallback
     }
 
-    const history = historyPath.map((m) => ({
-      role: m.role as 'user' | 'assistant' | 'system',
-      content: m.content,
+    const history = await Promise.all(historyPath.map(async (m) => {
+      let content = m.content;
+      let images: string[] = [];
+
+      if (m.attachments) {
+        try {
+          const parsedAttachments: import('@/types').Attachment[] = JSON.parse(m.attachments);
+          for (const att of parsedAttachments) {
+            if (att.type === 'image') {
+              const b64 = await invoke<string>('read_object_base64', { id: att.objectId });
+              images.push(b64);
+            } else if (att.type === 'text') {
+              const txt = await invoke<string>('read_object_text', { id: att.objectId });
+              content += `\n\n--- Attachment: ${att.name} ---\n${txt}`;
+            }
+          }
+        } catch (e) {
+          console.error('Failed to parse or load attachments for message', m.id, e);
+        }
+      }
+
+      return {
+        role: m.role as 'user' | 'assistant' | 'system',
+        content,
+        images: images.length > 0 ? images : undefined,
+      };
     }));
 
     // Stream response
@@ -239,7 +263,7 @@ export function ChatPage() {
             provider,
             modelId: settings.extraction_model || activeModelId,
           });
-          if (systemMsg) history.unshift({ role: 'system', content: systemMsg });
+          if (systemMsg) history.unshift({ role: 'system', content: systemMsg, images: undefined });
         } catch (e) {
           console.error('Failed to build project context:', e);
         }
@@ -263,7 +287,7 @@ export function ChatPage() {
     
     const selectedPersona = personas.find(p => p.id === personaId) || personas.find(p => p.id === 'default-assistant');
     if (selectedPersona && selectedPersona.prompt) {
-      history.unshift({ role: 'system', content: selectedPersona.prompt });
+      history.unshift({ role: 'system', content: selectedPersona.prompt, images: undefined });
     }
 
     const abortCtrl = new AbortController();
@@ -410,7 +434,7 @@ export function ChatPage() {
     }
 
     // Instead of overwriting, we branch out by sending a new prompt with the same parent
-    await handleSend(content, parentId);
+    await handleSend(content, undefined, parentId);
   }, [messages, handleSend]);
 
   const handleFork = useCallback(async (messageId: string) => {
@@ -572,7 +596,7 @@ export function ChatPage() {
         {!hasMessages ? (
           <div className="flex h-full">
             <div className="flex-1 flex flex-col px-8 py-12">
-              <ChatWelcome onSuggestion={handleSend} />
+              <ChatWelcome onSuggestion={(text) => handleSend(text)} />
             </div>
           </div>
         ) : (

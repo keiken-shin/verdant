@@ -47,7 +47,7 @@ function isStale(s: Session): boolean {
 /** Assemble the project system message from instructions + KB files + sibling summaries. */
 export function buildProjectSystemMessage(
   project: Project,
-  files: ProjectFile[],
+  files: (ProjectFile & { content_text?: string })[],
   siblingSummaries: { title: string; summary: string }[]
 ): string {
   const parts: string[] = [];
@@ -62,8 +62,8 @@ export function buildProjectSystemMessage(
   }
 
   const fileBlocks = files
-    .filter((f) => f.content_text.trim())
-    .map((f) => `## File: ${f.name}\n${f.content_text.slice(0, MAX_FILE_CHARS)}`);
+    .filter((f) => f.content_text?.trim())
+    .map((f) => `## File: ${f.name}\n${f.content_text!.slice(0, MAX_FILE_CHARS)}`);
   if (fileBlocks.length) {
     parts.push(`# Knowledge base\n${fileBlocks.join('\n\n')}`);
   }
@@ -116,12 +116,24 @@ export async function buildProjectContext(opts: {
     }
   }
 
+  const filesWithContent = await Promise.all(
+    files.map(async (f) => {
+      try {
+        const text = await invoke<string>('read_object_text', { id: f.object_id });
+        return { ...f, content_text: text };
+      } catch (e) {
+        console.error(`Failed to read object ${f.object_id}:`, e);
+        return { ...f, content_text: '' };
+      }
+    })
+  );
+
   const hasContext =
     project.instructions?.trim() ||
     project.description?.trim() ||
-    files.some((f) => f.content_text.trim()) ||
+    filesWithContent.some((f) => f.content_text.trim()) ||
     summaries.length > 0;
   if (!hasContext) return null;
 
-  return buildProjectSystemMessage(project, files, summaries);
+  return buildProjectSystemMessage(project, filesWithContent, summaries);
 }

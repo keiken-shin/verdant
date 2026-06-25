@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, Plus, Trash2 } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
-import { readTextFile } from '@tauri-apps/plugin-fs';
+import { invoke } from '@tauri-apps/api/core';
+import { readTextFile, readFile } from '@tauri-apps/plugin-fs';
 import { useProjectStore } from '@/stores/projectStore';
 import type { Project, ProjectFile } from '@/types';
 
@@ -30,10 +31,12 @@ export function ProjectFilesTab({ project, files }: ProjectFilesTabProps) {
     const selected = await open({ multiple: false, filters: [{ name: 'Text', extensions: FILE_EXTS }] });
     if (typeof selected !== 'string') return;
     try {
-      const text = await readTextFile(selected);
+      const bytes = await readFile(selected);
       const name = selected.split(/[\\/]/).pop() || selected;
       const ext = name.includes('.') ? name.split('.').pop()! : '';
-      await addProjectFile(project.id, name, ext, text.length, text);
+      
+      const objectId = await invoke<string>('store_object', { data: Array.from(bytes) });
+      await addProjectFile(project.id, name, ext, bytes.length, objectId);
     } catch (e) {
       console.error('Failed to read file:', e);
       alert(`Could not read file: ${e instanceof Error ? e.message : String(e)}`);

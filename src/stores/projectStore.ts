@@ -15,7 +15,7 @@ interface ProjectStore {
   searchProjects: (query: string) => Promise<Project[]>;
 
   fetchProjectFiles: (projectId: string) => Promise<void>;
-  addProjectFile: (projectId: string, name: string, ext: string, size: number, contentText: string) => Promise<ProjectFile>;
+  addProjectFile: (projectId: string, name: string, ext: string, size: number, objectId: string) => Promise<ProjectFile>;
   deleteProjectFile: (projectId: string, id: string) => Promise<void>;
 }
 
@@ -73,9 +73,9 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     set((state) => ({ filesByProject: { ...state.filesByProject, [projectId]: files } }));
   },
 
-  addProjectFile: async (projectId, name, ext, size, contentText) => {
+  addProjectFile: async (projectId, name, ext, size, objectId) => {
     const file = await invoke<ProjectFile>('create_project_file', {
-      input: { project_id: projectId, name, ext, size, content_text: contentText },
+      input: { project_id: projectId, name, ext, size, object_id: objectId },
     });
     set((state) => ({
       filesByProject: {

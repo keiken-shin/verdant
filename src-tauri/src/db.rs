@@ -72,6 +72,14 @@ impl Database {
             )?;
         }
 
+        if version < 5 {
+            conn.execute_batch(include_str!("../migrations/005_object_store.sql"))?;
+            conn.execute(
+                "INSERT INTO schema_version (version, applied_at) VALUES (5, datetime('now'))",
+                [],
+            )?;
+        }
+
         Ok(())
     }
 }
