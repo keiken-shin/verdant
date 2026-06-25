@@ -94,6 +94,22 @@ export function ChatPage() {
     : undefined;
   const messages = sessionId ? (messagesBySession[sessionId] || EMPTY_MESSAGES) : EMPTY_MESSAGES;
 
+  const baseContextTokens = React.useMemo(() => {
+    let tokens = messages.reduce((acc, m) => acc + Math.ceil(m.content.length / 4), 0);
+    if (project) {
+      const files = filesByProject[project.id] || [];
+      const filesTokens = files.reduce((acc, f) => {
+        if (f.include_mode === 'reference') return acc;
+        if (f.include_mode === 'summary' && f.summary) {
+          return acc + Math.ceil(f.summary.length / 4);
+        }
+        return acc + Math.ceil((f.size || 0) / 4);
+      }, 0);
+      tokens += filesTokens;
+    }
+    return tokens;
+  }, [messages, project, filesByProject]);
+
   // Load messages when session changes
   useEffect(() => {
     if (sessionId && !messagesBySession[sessionId]) {
@@ -686,6 +702,7 @@ export function ChatPage() {
           selectedModelId={activeModelId}
           onModelChange={setActiveModel}
           modelsLoading={modelsLoading}
+          baseContextTokens={baseContextTokens}
         />
       </div>
     </div>

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { MessageSquare } from 'lucide-react';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { useSessionStore } from '@/stores/sessionStore';
+import { useProjectStore } from '@/stores/projectStore';
 import { useModels } from '@/hooks/useModels';
 import { formatRelativeTime } from '@/utils';
 import type { Session } from '@/types';
@@ -15,7 +16,19 @@ interface ProjectChatTabProps {
 export function ProjectChatTab({ projectId, projectSessions }: ProjectChatTabProps) {
   const navigate = useNavigate();
   const { createSession } = useSessionStore();
+  const { filesByProject } = useProjectStore();
   const { models, modelsLoading, activeModelId, setActiveModel } = useModels();
+
+  const baseContextTokens = React.useMemo(() => {
+    const files = filesByProject[projectId] || [];
+    return files.reduce((acc, f) => {
+      if (f.include_mode === 'reference') return acc;
+      if (f.include_mode === 'summary' && f.summary) {
+        return acc + Math.ceil(f.summary.length / 4);
+      }
+      return acc + Math.ceil((f.size || 0) / 4);
+    }, 0);
+  }, [filesByProject, projectId]);
 
   const handleStart = async (prompt: string) => {
     const title = prompt.slice(0, 50).trim() || 'Untitled';
@@ -34,6 +47,7 @@ export function ProjectChatTab({ projectId, projectSessions }: ProjectChatTabPro
           modelsLoading={modelsLoading}
           placeholder="Start a new session in this project..."
           dropdownDirection="down"
+          baseContextTokens={baseContextTokens}
         />
       </div>
 
