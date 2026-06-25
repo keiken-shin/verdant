@@ -6,6 +6,7 @@ import { readFile } from '@tauri-apps/plugin-fs';
 import { cn } from '@/utils';
 import { ModelSelector } from './ModelSelector';
 import { AttachmentThumbnail } from './AttachmentThumbnail';
+import { useSettingsStore } from '@/stores/settingsStore';
 import type { ModelInfo, Attachment } from '@/types';
 
 interface ChatInputProps {
@@ -19,6 +20,7 @@ interface ChatInputProps {
   disabled?: boolean;
   placeholder?: string;
   dropdownDirection?: 'up' | 'down';
+  baseContextTokens?: number;
 }
 
 export function ChatInput({
@@ -32,7 +34,9 @@ export function ChatInput({
   disabled,
   placeholder = 'Ask, think aloud, or paste a passage...',
   dropdownDirection = 'up',
+  baseContextTokens = 0,
 }: ChatInputProps) {
+  const { settings } = useSettingsStore();
   const [value, setValue] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -43,9 +47,17 @@ export function ChatInput({
   const hasImageAttachments = attachments.some(a => a.type === 'image');
   const preventSubmit = hasImageAttachments && !supportsVision;
 
+  const maxContextTokens = settings.ollama_num_ctx || activeModelInfo?.contextLength || 8192;
+  const estimatedTokens = baseContextTokens + Math.ceil(value.length / 4) + (attachments.length * 1000);
+  const contextRatio = estimatedTokens / maxContextTokens;
+  const isContextWarning = contextRatio > 0.8;
+  const isContextCritical = contextRatio > 1.0;
+  
+  const reallyPreventSubmit = preventSubmit || isContextCritical;
+
   const handleSubmit = () => {
     const trimmed = value.trim();
-    if ((!trimmed && attachments.length === 0) || isStreaming || preventSubmit) return;
+    if ((!trimmed && attachments.length === 0) || isStreaming || reallyPreventSubmit) return;
     
     const attStr = attachments.length > 0 ? JSON.stringify(attachments) : undefined;
     onSend(trimmed, attStr);
@@ -112,8 +124,24 @@ export function ChatInput({
   }, [value]);
 
   return (
-    <div className="w-full max-w-2xl mx-auto">
-      <div className="border border-zinc-200 rounded-xl bg-white shadow-sm focus-within:border-zinc-300 focus-within:shadow-md transition-all relative">
+    <div className="w-full max-w-2xl mx-auto flex flex-col gap-2">
+      {isContextWarning && (
+        <div className={cn(
+          "px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-2",
+          isContextCritical ? "bg-red-50 text-red-600 border border-red-200" : "bg-amber-50 text-amber-700 border border-amber-200"
+        )}>
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>
+            {isContextCritical 
+              ? `Estimated context exceeds limits (${Math.round(estimatedTokens).toLocaleString()} / ${maxContextTokens.toLocaleString()} tokens). Please remove attachments or start a new chat.` 
+              : `Context nearing limit (${Math.round(estimatedTokens).toLocaleString()} / ${maxContextTokens.toLocaleString()} tokens).`}
+          </span>
+        </div>
+      )}
+      <div className={cn(
+        "border rounded-xl bg-white shadow-sm transition-all relative",
+        isContextCritical ? "border-red-300 focus-within:border-red-400" : "border-zinc-200 focus-within:border-zinc-300 focus-within:shadow-md"
+      )}>
         {/* Attachments Preview */}
         {attachments.length > 0 && (
           <div className="px-4 pt-3 flex flex-wrap gap-2">
@@ -186,29 +214,21 @@ export function ChatInput({
           </div>
 
           {/* Send / Stop button */}
-          {isStreaming ? (
-            <button
-              onClick={onStop}
-              className="flex items-center justify-center h-7 w-7 rounded-full bg-zinc-900 text-white hover:bg-zinc-700 transition-colors"
-              aria-label="Stop generation"
-            >
-              <Square className="h-3 w-3 fill-current" />
-            </button>
-          ) : (
-            <button
-              onClick={handleSubmit}
-              disabled={(!value.trim() && attachments.length === 0) || disabled || preventSubmit}
-              className={cn(
-                'flex items-center justify-center h-7 w-7 rounded-full transition-all',
-                (value.trim() || attachments.length > 0) && !disabled && !preventSubmit
-                  ? 'bg-zinc-900 text-white hover:bg-zinc-700'
-                  : 'bg-zinc-100 text-zinc-300 cursor-not-allowed'
-              )}
-              aria-label="Send message"
-            >
-              <ArrowUp className="h-4 w-4" />
-            </button>
-          )}
+          <button
+            onClick={isStreaming ? onStop : handleSubmit}
+            disabled={(!value.trim() && attachments.length === 0 && !isStreaming) || (!isStreaming && reallyPreventSubmit)}
+            className={cn(
+              "flex items-center justify-center h-7 w-7 rounded-full transition-all",
+              isStreaming
+                ? "bg-zinc-900 text-white hover:bg-zinc-700"
+                : (!value.trim() && attachments.length === 0) || reallyPreventSubmit
+                  ? "bg-zinc-100 text-zinc-300 cursor-not-allowed"
+                  : "bg-zinc-900 text-white hover:bg-zinc-700 shadow-sm"
+            )}
+            aria-label={isStreaming ? "Stop generation" : "Send message"}
+          >
+            {isStreaming ? <Square className="h-3 w-3 fill-current" /> : <ArrowUp className="h-4 w-4" />}
+          </button>
         </div>
       </div>
     </div>
