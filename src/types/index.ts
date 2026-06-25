@@ -156,6 +156,7 @@ export interface ModelInfo {
   pulledAt?: string;
   isLocal: boolean;
   isActive?: boolean;
+  capabilities?: string[];
 }
 
 export interface ChatMessage {
@@ -179,6 +180,8 @@ export interface ChatResponse {
 export interface StreamChunk {
   content: string;
   done: boolean;
+  prompt_eval_count?: number;
+  eval_count?: number;
 }
 
 export interface HealthCheckResult {

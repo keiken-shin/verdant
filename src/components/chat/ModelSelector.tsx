@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Eye } from 'lucide-react';
 import { cn } from '@/utils';
 import type { ModelInfo } from '@/types';
 
@@ -65,9 +65,17 @@ export function ModelSelector({ models, selectedModelId, onSelect, loading, dire
                   model.id === selectedModelId && 'text-[var(--color-verdant-primary)] font-medium bg-zinc-50'
                 )}
               >
-                <div className="font-mono font-medium">{model.name}</div>
+                <div className="flex items-center justify-between">
+                  <div className="font-mono font-medium truncate pr-2">{model.name}</div>
+                  {model.capabilities?.includes('vision') && (
+                    <div className="flex items-center gap-0.5 text-blue-500 bg-blue-50 px-1 py-0.5 rounded text-[9px] uppercase tracking-wider shrink-0" title="Supports Image Attachments">
+                      <Eye className="h-2.5 w-2.5" />
+                      Vision
+                    </div>
+                  )}
+                </div>
                 {model.vendor && (
-                  <div className="text-zinc-400 text-[11px]">{model.vendor}</div>
+                  <div className="text-zinc-400 text-[11px] mt-0.5">{model.vendor}</div>
                 )}
               </button>
             ))
