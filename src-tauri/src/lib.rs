@@ -79,6 +79,11 @@ pub fn run() {
             commands::export::export_session_markdown,
             commands::export::export_memories_json,
             commands::export::export_graph_json,
+            // Objects
+            commands::objects::store_object,
+            commands::objects::read_object_base64,
+            commands::objects::read_object_text,
+            commands::objects::delete_object,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

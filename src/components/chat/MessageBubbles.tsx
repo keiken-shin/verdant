@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
-import { Copy, RotateCcw, Edit2, Check, ChevronDown, ChevronUp, Brain, GitBranch } from 'lucide-react';
+import { Copy, RotateCcw, Edit2, Check, ChevronDown, ChevronUp, Brain, GitBranch, FileText, Image as ImageIcon } from 'lucide-react';
 
 const MarkdownRenderer = ({ content }: { content: string }) => {
   return (
@@ -63,6 +63,7 @@ const MarkdownRenderer = ({ content }: { content: string }) => {
 };
 import { cn, parseThinking } from '@/utils';
 import type { Message } from '@/types';
+import { AttachmentThumbnail } from './AttachmentThumbnail';
 
 interface UserMessageProps {
   message: Message;
@@ -114,7 +115,52 @@ export function UserMessage({ message, onEdit, variantIndex, totalVariants, onSw
         ) : (
           <div className="relative">
             <div className="bg-zinc-100 rounded-2xl rounded-tr-sm px-4 py-3 text-sm text-zinc-800 leading-relaxed whitespace-pre-wrap">
-              {message.content}
+              {(() => {
+                let parsedAttachments: any[] = [];
+                if (message.attachments) {
+                  try {
+                    parsedAttachments = JSON.parse(message.attachments);
+                  } catch (e) {}
+                }
+
+                const images = parsedAttachments.filter(att => att.type === 'image');
+                const others = parsedAttachments.filter(att => att.type !== 'image');
+                
+                return (
+                  <>
+                    {images.length === 1 && (
+                      <div className="mb-3">
+                        <AttachmentThumbnail
+                          attachment={images[0]}
+                          className="w-full max-w-sm h-auto max-h-72 object-cover rounded-lg shadow-sm"
+                          fallbackClassName="w-full max-w-sm h-48 bg-zinc-200 animate-pulse rounded-lg flex items-center justify-center"
+                        />
+                      </div>
+                    )}
+                    {images.length > 1 && (
+                      <div className="flex overflow-x-auto snap-x gap-2 mb-3 pb-2 -mx-1 px-1 custom-scrollbar">
+                        {images.map(att => (
+                          <div key={att.id} className="snap-start shrink-0">
+                            <AttachmentThumbnail
+                              attachment={att}
+                              className="w-48 h-48 object-cover rounded-lg shadow-sm"
+                              fallbackClassName="w-48 h-48 bg-zinc-200 animate-pulse rounded-lg flex items-center justify-center"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {others.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {others.map((att: any) => (
+                          <AttachmentThumbnail key={att.id} attachment={att} />
+                        ))}
+                      </div>
+                    )}
+                    {message.content}
+                  </>
+                );
+              })()}
             </div>
             <div className="absolute -bottom-6 right-0 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2">
               <span className="text-[10px] text-zinc-400 font-mono select-none">

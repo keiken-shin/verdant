@@ -12,7 +12,7 @@ pub struct ProjectFile {
     pub name: String,
     pub ext: Option<String>,
     pub size: i64,
-    pub content_text: String,
+    pub object_id: String,
     pub created_at: String,
 }
 
@@ -22,14 +22,14 @@ pub struct CreateProjectFileInput {
     pub name: String,
     pub ext: Option<String>,
     pub size: Option<i64>,
-    pub content_text: String,
+    pub object_id: String,
 }
 
 #[tauri::command]
 pub fn get_project_files(project_id: String, db: State<Database>) -> Result<Vec<ProjectFile>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn.prepare(
-        "SELECT id, project_id, name, ext, size, content_text, created_at
+        "SELECT id, project_id, name, ext, size, object_id, created_at
          FROM project_files WHERE project_id = ?1 ORDER BY created_at DESC"
     ).map_err(|e| e.to_string())?;
 
@@ -40,7 +40,7 @@ pub fn get_project_files(project_id: String, db: State<Database>) -> Result<Vec<
             name: row.get(2)?,
             ext: row.get(3)?,
             size: row.get(4)?,
-            content_text: row.get(5)?,
+            object_id: row.get(5)?,
             created_at: row.get(6)?,
         })
     }).map_err(|e| e.to_string())?;
@@ -53,12 +53,12 @@ pub fn create_project_file(input: CreateProjectFileInput, db: State<Database>) -
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let id = uuid::Uuid::new_v4().to_string();
     let now = chrono::Utc::now().to_rfc3339();
-    let size = input.size.unwrap_or(input.content_text.len() as i64);
+    let size = input.size.unwrap_or(0);
 
     conn.execute(
-        "INSERT INTO project_files (id, project_id, name, ext, size, content_text, created_at)
+        "INSERT INTO project_files (id, project_id, name, ext, size, object_id, created_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        params![id, input.project_id, input.name, input.ext, size, input.content_text, now],
+        params![id, input.project_id, input.name, input.ext, size, input.object_id, now],
     ).map_err(|e| e.to_string())?;
 
     Ok(ProjectFile {
@@ -67,7 +67,7 @@ pub fn create_project_file(input: CreateProjectFileInput, db: State<Database>) -
         name: input.name,
         ext: input.ext,
         size,
-        content_text: input.content_text,
+        object_id: input.object_id,
         created_at: now,
     })
 }

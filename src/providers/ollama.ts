@@ -145,7 +145,18 @@ export class OllamaProvider implements LLMProvider {
     });
 
     if (!response.ok) {
-      throw new Error(`Stream chat failed: HTTP ${response.status}`);
+      let errorText = `HTTP ${response.status}`;
+      try {
+        const bodyText = await response.text();
+        try {
+          const errJson = JSON.parse(bodyText);
+          if (errJson.error) errorText = `${errorText} - ${errJson.error}`;
+          else errorText = `${errorText} - ${bodyText}`;
+        } catch (e) {
+          errorText = `${errorText} - ${bodyText}`;
+        }
+      } catch (e) {}
+      throw new Error(`Stream chat failed: ${errorText}`);
     }
 
     const reader = response.body?.getReader();
