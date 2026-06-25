@@ -81,7 +81,7 @@ export class OllamaProvider implements LLMProvider {
 
     const data = await response.json() as OllamaTagsResponse;
 
-    return data.models.map((m) => ({
+    const models: ModelInfo[] = data.models.map((m) => ({
       id: m.name,
       name: m.name,
       displayName: m.name.split(':')[0],
@@ -92,7 +92,28 @@ export class OllamaProvider implements LLMProvider {
       vendor: m.details.family || undefined,
       pulledAt: m.modified_at,
       isLocal: true,
+      capabilities: [],
     }));
+
+    await Promise.all(models.map(async (m) => {
+      try {
+        const showRes = await fetch(`${this.endpoint}/api/show`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: m.id })
+        });
+        if (showRes.ok) {
+          const showData = await showRes.json() as any;
+          m.capabilities = showData.capabilities || [];
+          const ctxKey = Object.keys(showData.model_info || {}).find(k => k.endsWith('.context_length'));
+          if (ctxKey) m.contextLength = showData.model_info[ctxKey];
+        }
+      } catch (e) {
+        // ignore
+      }
+    }));
+
+    return models;
   }
 
   async chat(request: ChatRequest): Promise<ChatResponse> {
@@ -202,6 +223,8 @@ export class OllamaProvider implements LLMProvider {
           onChunk({
             content: chunkText,
             done: chunk.done,
+            prompt_eval_count: (chunk as any).prompt_eval_count,
+            eval_count: (chunk as any).eval_count,
           });
           if (chunk.done) {
              // ensure we close the tag if it ended abruptly

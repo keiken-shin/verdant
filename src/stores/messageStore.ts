@@ -5,11 +5,13 @@ import type { Message } from '@/types';
 interface MessageStore {
   messagesBySession: Record<string, Message[]>;
   activeVariantIds: Record<string, Record<string, string>>; // session_id -> { parent_id -> selected_child_id }
+  lastContextUsage: { used: number; total: number } | null;
   streamingContent: string;
   isStreaming: boolean;
   streamingSessionId: string | null;
   abortController: AbortController | null;
 
+  setLastContextUsage: (usage: { used: number; total: number } | null) => void;
   fetchMessages: (sessionId: string) => Promise<void>;
   addMessage: (sessionId: string, role: 'user' | 'assistant' | 'system', content: string, modelId?: string, parentId?: string | null, attachments?: string) => Promise<Message>;
   setActiveVariant: (sessionId: string, parentId: string, childId: string) => void;
@@ -27,10 +29,13 @@ interface MessageStore {
 export const useMessageStore = create<MessageStore>((set, get) => ({
   messagesBySession: {},
   activeVariantIds: {},
+  lastContextUsage: null,
   streamingContent: '',
   isStreaming: false,
   streamingSessionId: null,
   abortController: null,
+
+  setLastContextUsage: (usage) => set({ lastContextUsage: usage }),
 
   fetchMessages: async (sessionId) => {
     const messages = await invoke<Message[]>('get_messages', { sessionId });

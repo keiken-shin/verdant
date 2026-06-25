@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Paperclip, ArrowUp, Square, FileText, Image as ImageIcon, X } from 'lucide-react';
+import { Paperclip, ArrowUp, Square, FileText, Image as ImageIcon, X, AlertCircle } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { readFile } from '@tauri-apps/plugin-fs';
@@ -37,9 +37,15 @@ export function ChatInput({
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const activeModelInfo = models.find(m => m.id === selectedModelId);
+  // Default to true if capabilities are unknown, to be safe/permissive
+  const supportsVision = activeModelInfo?.capabilities?.includes('vision') ?? true;
+  const hasImageAttachments = attachments.some(a => a.type === 'image');
+  const preventSubmit = hasImageAttachments && !supportsVision;
+
   const handleSubmit = () => {
     const trimmed = value.trim();
-    if ((!trimmed && attachments.length === 0) || isStreaming) return;
+    if ((!trimmed && attachments.length === 0) || isStreaming || preventSubmit) return;
     
     const attStr = attachments.length > 0 ? JSON.stringify(attachments) : undefined;
     onSend(trimmed, attStr);
@@ -53,9 +59,13 @@ export function ChatInput({
   };
 
   const handleAttach = async () => {
+    const extensions = supportsVision 
+      ? ['png', 'jpg', 'jpeg', 'webp', 'txt', 'md', 'csv', 'json']
+      : ['txt', 'md', 'csv', 'json'];
+
     const selected = await open({
       multiple: true,
-      filters: [{ name: 'Allowed Files', extensions: ['png', 'jpg', 'jpeg', 'webp', 'txt', 'md', 'csv', 'json'] }],
+      filters: [{ name: 'Allowed Files', extensions }],
     });
     if (!selected) return;
     const files = Array.isArray(selected) ? selected : [selected];
@@ -107,12 +117,31 @@ export function ChatInput({
         {/* Attachments Preview */}
         {attachments.length > 0 && (
           <div className="px-4 pt-3 flex flex-wrap gap-2">
+
             {attachments.map((att) => (
-              <div key={att.id} className="relative group/att inline-block">
-                <AttachmentThumbnail attachment={att} />
+              <div 
+                key={att.id} 
+                className={cn(
+                  "relative group/att inline-block transition-all",
+                  preventSubmit && att.type === 'image' ? "after:absolute after:inset-0 after:border-2 after:border-red-500 after:rounded-xl after:pointer-events-none" : ""
+                )}
+              >
+                <div className={cn("transition-all", preventSubmit && att.type === 'image' ? "grayscale opacity-50" : "")}>
+                  <AttachmentThumbnail attachment={att} />
+                </div>
+                
+                {preventSubmit && att.type === 'image' && (
+                  <div 
+                    className="absolute -top-1.5 -left-1.5 p-[1px] bg-white rounded-full shadow-sm z-20 cursor-help"
+                    title="The selected model does not support image attachments. Please remove images or switch to a vision model."
+                  >
+                    <AlertCircle className="h-4 w-4 text-red-500" />
+                  </div>
+                )}
+
                 <button
                   onClick={() => removeAttachment(att.id)}
-                  className="absolute -top-1 -right-1 p-0.5 rounded-full bg-zinc-800 text-white opacity-0 group-hover/att:opacity-100 transition-opacity shadow-sm z-10"
+                  className="absolute -top-1 -right-1 p-0.5 rounded-full bg-zinc-800 text-white opacity-0 group-hover/att:opacity-100 transition-opacity shadow-sm z-20"
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -168,10 +197,10 @@ export function ChatInput({
           ) : (
             <button
               onClick={handleSubmit}
-              disabled={(!value.trim() && attachments.length === 0) || disabled}
+              disabled={(!value.trim() && attachments.length === 0) || disabled || preventSubmit}
               className={cn(
                 'flex items-center justify-center h-7 w-7 rounded-full transition-all',
-                (value.trim() || attachments.length > 0) && !disabled
+                (value.trim() || attachments.length > 0) && !disabled && !preventSubmit
                   ? 'bg-zinc-900 text-white hover:bg-zinc-700'
                   : 'bg-zinc-100 text-zinc-300 cursor-not-allowed'
               )}

@@ -3,6 +3,8 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { invoke } from '@tauri-apps/api/core';
 import { useConfirmStore } from '@/stores/confirmStore';
 import { Edit2, Trash2, Check, X, FolderKanban, ArrowDown } from 'lucide-react';
+
+import { ContextIndicator } from '@/components/chat/ContextIndicator';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { UserMessage, AssistantMessage, StreamingMessage } from '@/components/chat/MessageBubbles';
 import { SectionLabel } from '@/components/ui/PageHeader';
@@ -261,7 +263,8 @@ export function ChatPage() {
             files,
             currentSessionId: sid,
             provider,
-            modelId: settings.extraction_model || activeModelId,
+            modelId: settings.extraction_model || activeModelId || 'llama3',
+            budgetTokens: Math.floor((settings.ollama_num_ctx || 32768) * 0.8), // Leave 20% for history and response
           });
           if (systemMsg) history.unshift({ role: 'system', content: systemMsg, images: undefined });
         } catch (e) {
@@ -302,6 +305,12 @@ export function ChatPage() {
         { model: activeModelId, messages: history, stream: true },
         (chunk) => {
           if (chunk.content) appendStreamingContent(chunk.content);
+          if (chunk.done && typeof chunk.prompt_eval_count === 'number') {
+             useMessageStore.getState().setLastContextUsage({
+               used: chunk.prompt_eval_count + (chunk.eval_count || 0),
+               total: settings.ollama_num_ctx || 32768,
+             });
+          }
         },
         abortCtrl.signal
       );
@@ -391,7 +400,8 @@ export function ChatPage() {
           if (proj) {
             const files = useProjectStore.getState().filesByProject[proj.id] || [];
             const systemMsg = await buildProjectContext({
-              project: proj, files, currentSessionId: sessionId, provider, modelId: settings.extraction_model || activeModelId || 'llama3'
+              project: proj, files, currentSessionId: sessionId, provider, modelId: settings.extraction_model || activeModelId || 'llama3',
+              budgetTokens: Math.floor((settings.ollama_num_ctx || 32768) * 0.8),
             });
             if (systemMsg) history.unshift({ role: 'system', content: systemMsg });
           }
@@ -584,7 +594,7 @@ export function ChatPage() {
             </>
           )}
         </div>
-
+        <ContextIndicator />
       </div>
 
       {/* Messages / Welcome */}

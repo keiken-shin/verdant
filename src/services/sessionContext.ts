@@ -2,12 +2,10 @@ import { invoke } from '@tauri-apps/api/core';
 import type { ChatMessage, LLMProvider, Project, ProjectFile, Session, Message } from '@/types';
 import { parseThinking } from '@/utils';
 
-// Char budgets for injected project context. Local models have small windows,
-// so we truncate per-part and hard-cap the total.
-// ponytail: char-budget truncation; swap to token-aware/relevance-ranked if budgets bite.
+// We use a heuristic of ~4 chars per token.
+// Local models have small windows, so we cap the total injected context.
 const MAX_FILE_CHARS = 4000;
 const MAX_SUMMARY_CHARS = 600;
-const MAX_TOTAL_CHARS = 12000;
 
 const SUMMARY_PROMPT = `You summarize a chat conversation for future reference.
 Write 2-4 sentences capturing the key topics, questions, decisions, and conclusions.
@@ -48,7 +46,8 @@ function isStale(s: Session): boolean {
 export function buildProjectSystemMessage(
   project: Project,
   files: (ProjectFile & { content_text?: string })[],
-  siblingSummaries: { title: string; summary: string }[]
+  siblingSummaries: { title: string; summary: string }[],
+  budgetChars: number = 12000
 ): string {
   const parts: string[] = [];
 
@@ -75,8 +74,13 @@ export function buildProjectSystemMessage(
     parts.push(`# Earlier sessions in this project\n${summaryBlocks.join('\n')}`);
   }
 
-  // Hard cap guarantees the injected message never exceeds the budget.
-  return parts.join('\n\n').slice(0, MAX_TOTAL_CHARS);
+  // Assembly with budget checking
+  let finalMessage = parts.join('\n\n');
+  if (finalMessage.length > budgetChars) {
+    finalMessage = finalMessage.slice(0, budgetChars) + '\n\n[SYSTEM WARNING: Project context truncated due to model context limits. Some files or summaries may be incomplete.]';
+  }
+
+  return finalMessage;
 }
 
 /**
@@ -90,6 +94,7 @@ export async function buildProjectContext(opts: {
   currentSessionId: string | null;
   provider: LLMProvider;
   modelId: string;
+  budgetTokens?: number;
 }): Promise<string | null> {
   const { project, files, currentSessionId, provider, modelId } = opts;
 
@@ -135,5 +140,6 @@ export async function buildProjectContext(opts: {
     summaries.length > 0;
   if (!hasContext) return null;
 
-  return buildProjectSystemMessage(project, filesWithContent, summaries);
+  const budgetChars = (opts.budgetTokens || 3000) * 4;
+  return buildProjectSystemMessage(project, filesWithContent, summaries, budgetChars);
 }
