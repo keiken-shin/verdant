@@ -66,6 +66,7 @@ pub fn run() {
             commands::graph::create_graph_node,
             commands::graph::create_graph_edge,
             commands::graph::update_node_positions,
+            commands::graph::update_node_metadata,
             commands::graph::delete_graph_node,
             commands::graph::delete_graph_edge,
             commands::graph::record_graph_extraction,

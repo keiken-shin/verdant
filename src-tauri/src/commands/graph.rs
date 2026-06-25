@@ -36,6 +36,8 @@ pub struct CreateNodeInput {
     pub x: Option<f64>,
     pub y: Option<f64>,
     pub project_id: Option<String>,
+    /// Optional JSON metadata blob (e.g. source_session_id, relevance, conversation_type)
+    pub metadata: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -61,14 +63,14 @@ pub struct GraphData {
 
 fn category_to_color(category: &str) -> String {
     match category {
-        "CONCEPT"  => "#5A67D8".to_string(),
-        "READING"  => "#E8853D".to_string(),
-        "CORE"     => "#1A1A1A".to_string(),
-        "IDEA"     => "#9F5AD8".to_string(),
-        "ESSAY"    => "#38A169".to_string(),
-        "RESEARCH" => "#3B82F6".to_string(),
-        "DESIGN"   => "#1E3A5F".to_string(),
-        _          => "#5A67D8".to_string(),
+        "ENTITY"   => "#E8853D".to_string(),  // amber  — concrete named things
+        "TOPIC"    => "#5A67D8".to_string(),  // indigo — abstract themes/subjects
+        "DECISION" => "#D97706".to_string(),  // gold   — choices made
+        "ACTION"   => "#059669".to_string(),  // emerald— tasks/next steps
+        "QUESTION" => "#8B5CF6".to_string(),  // violet — open questions
+        "INSIGHT"  => "#EC4899".to_string(),  // pink   — conclusions/learnings
+        "TOOL"     => "#64748B".to_string(),  // slate  — technologies/libraries
+        _          => "#5A67D8".to_string(),  // default indigo
     }
 }
 
@@ -130,11 +132,13 @@ pub fn create_graph_node(input: CreateNodeInput, db: State<Database>) -> Result<
     let color = input.color.unwrap_or_else(|| category_to_color(&input.category));
     let x = input.x.unwrap_or(0.0);
     let y = input.y.unwrap_or(0.0);
+    // Use caller-supplied metadata or default to empty JSON object
+    let metadata = input.metadata.unwrap_or_else(|| "{}".to_string());
 
     conn.execute(
         "INSERT INTO graph_nodes (id, label, category, color, x, y, metadata, project_id, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, '{}', ?7, ?8, ?9)",
-        params![id, input.label, input.category, color, x, y, input.project_id, now, now],
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        params![id, input.label, input.category, color, x, y, metadata, input.project_id, now, now],
     ).map_err(|e| e.to_string())?;
 
     Ok(GraphNode {
@@ -143,11 +147,22 @@ pub fn create_graph_node(input: CreateNodeInput, db: State<Database>) -> Result<
         category: input.category,
         color: Some(color),
         x, y,
-        metadata: "{}".to_string(),
+        metadata,
         project_id: input.project_id,
         created_at: now.clone(),
         updated_at: now,
     })
+}
+
+#[tauri::command]
+pub fn update_node_metadata(id: String, metadata: String, db: State<Database>) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let now = chrono::Utc::now().to_rfc3339();
+    conn.execute(
+        "UPDATE graph_nodes SET metadata = ?1, updated_at = ?2 WHERE id = ?3",
+        params![metadata, now, id],
+    ).map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]
