@@ -47,6 +47,8 @@ pub fn run() {
             commands::project_files::get_project_files,
             commands::project_files::create_project_file,
             commands::project_files::delete_project_file,
+            commands::project_files::update_project_file_mode,
+            commands::project_files::update_project_file_summary,
             // Messages
             commands::messages::get_messages,
             commands::messages::create_message,

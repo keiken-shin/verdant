@@ -80,6 +80,22 @@ impl Database {
             )?;
         }
 
+        if version < 6 {
+            conn.execute_batch(include_str!("../migrations/006_project_file_inclusion.sql"))?;
+            conn.execute(
+                "INSERT INTO schema_version (version, applied_at) VALUES (6, datetime('now'))",
+                [],
+            )?;
+        }
+
+        if version < 7 {
+            conn.execute_batch(include_str!("../migrations/007_project_file_summary.sql"))?;
+            conn.execute(
+                "INSERT INTO schema_version (version, applied_at) VALUES (7, datetime('now'))",
+                [],
+            )?;
+        }
+
         Ok(())
     }
 }
