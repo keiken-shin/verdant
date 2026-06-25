@@ -12,7 +12,7 @@ import ReactFlow, {
   type Edge as FlowEdge,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { Plus, Trash2, Download } from 'lucide-react';
+import { Plus, Trash2, Download, Wand2 } from 'lucide-react';
 import { PageHeader, SectionLabel } from '@/components/ui/PageHeader';
 import { KnowledgeGraphNode } from '@/components/graph/KnowledgeGraphNode';
 import { Badge } from '@/components/ui/Badge';
@@ -22,6 +22,7 @@ import type { NodeCategory } from '@/types';
 import { invoke } from '@tauri-apps/api/core';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
+import { applyForceLayout } from '@/utils/layout';
 
 const nodeTypes = {
   knowledgeNode: KnowledgeGraphNode,
@@ -29,7 +30,7 @@ const nodeTypes = {
 
 function AddNodeModal({ onAdd, onClose }: { onAdd: (label: string, cat: NodeCategory) => void; onClose: () => void }) {
   const [label, setLabel] = useState('');
-  const [category, setCategory] = useState<NodeCategory>('CONCEPT');
+  const [category, setCategory] = useState<NodeCategory>('TOPIC');
 
   return (
     <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
@@ -99,18 +100,25 @@ export function KnowledgeGraphPage() {
 
   useEffect(() => { fetchGraph(); }, [fetchGraph]);
 
-  // Sync store nodes to flow nodes
   useEffect(() => {
-    const fNodes: FlowNode[] = storeNodes.map((n) => ({
-      id: n.id,
-      type: 'knowledgeNode',
-      position: { x: n.x, y: n.y },
-      data: {
-        label: n.label,
-        category: n.category as NodeCategory,
-        color: n.color,
-      },
-    }));
+    const fNodes: FlowNode[] = storeNodes.map((n) => {
+      let relevance = 0.5;
+      try {
+        const meta = JSON.parse(n.metadata || '{}');
+        if (typeof meta.relevance === 'number') relevance = meta.relevance;
+      } catch {}
+      return {
+        id: n.id,
+        type: 'knowledgeNode',
+        position: { x: n.x, y: n.y },
+        data: {
+          label: n.label,
+          category: n.category as NodeCategory,
+          color: n.color,
+          relevance,
+        },
+      };
+    });
     setFlowNodes(fNodes);
   }, [storeNodes]);
 
@@ -174,6 +182,26 @@ export function KnowledgeGraphPage() {
     }
   };
 
+  const handleAutoLayout = async () => {
+    if (flowNodes.length === 0) return;
+    const positionedNodes = applyForceLayout(flowNodes, flowEdges, {
+      width: 800,
+      height: 600,
+      nodeRadius: 100,
+      linkDistance: 200,
+      strength: -800
+    });
+    
+    setFlowNodes(positionedNodes);
+
+    const positions = positionedNodes.map(n => ({
+      id: n.id,
+      x: n.position.x,
+      y: n.position.y
+    }));
+    await updateNodePositions(positions);
+  };
+
   // Legend counts
   const categoryCounts = storeNodes.reduce<Record<string, number>>((acc, n) => {
     acc[n.category] = (acc[n.category] || 0) + 1;
@@ -199,6 +227,13 @@ export function KnowledgeGraphPage() {
                   Delete node
                 </button>
               )}
+              <button
+                onClick={handleAutoLayout}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-zinc-500 hover:bg-zinc-100 rounded-lg transition-colors border border-zinc-200"
+              >
+                <Wand2 className="h-3.5 w-3.5" />
+                Auto Layout
+              </button>
               <button
                 onClick={handleExport}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-zinc-500 hover:bg-zinc-100 rounded-lg transition-colors border border-zinc-200"

@@ -107,7 +107,7 @@ export interface GraphData {
   edges: GraphEdge[];
 }
 
-export type NodeCategory = 'CONCEPT' | 'READING' | 'CORE' | 'IDEA' | 'ESSAY' | 'RESEARCH' | 'DESIGN';
+export type NodeCategory = 'ENTITY' | 'TOPIC' | 'DECISION' | 'ACTION' | 'QUESTION' | 'INSIGHT' | 'TOOL';
 
 export interface Provider {
   id: string;
@@ -221,16 +221,16 @@ export type SessionTag = 'RESEARCH' | 'WRITING' | 'READING' | 'DESIGN' | 'CODING
 
 export const SESSION_TAGS: SessionTag[] = ['RESEARCH', 'WRITING', 'READING', 'DESIGN', 'CODING', 'OTHER'];
 
-export const NODE_CATEGORIES: NodeCategory[] = ['CONCEPT', 'READING', 'CORE', 'IDEA', 'ESSAY', 'RESEARCH', 'DESIGN'];
+export const NODE_CATEGORIES: NodeCategory[] = ['ENTITY', 'TOPIC', 'DECISION', 'ACTION', 'QUESTION', 'INSIGHT', 'TOOL'];
 
 export const NODE_CATEGORY_COLORS: Record<NodeCategory, string> = {
-  CONCEPT:  '#5A67D8',
-  READING:  '#E8853D',
-  CORE:     '#1A1A1A',
-  IDEA:     '#9F5AD8',
-  ESSAY:    '#38A169',
-  RESEARCH: '#3B82F6',
-  DESIGN:   '#1E3A5F',
+  ENTITY:   '#E8853D', // amber   — concrete named things
+  TOPIC:    '#5A67D8', // indigo  — abstract themes/subjects
+  DECISION: '#D97706', // gold    — choices made
+  ACTION:   '#059669', // emerald — tasks/next steps
+  QUESTION: '#8B5CF6', // violet  — open questions
+  INSIGHT:  '#EC4899', // pink    — conclusions/learnings
+  TOOL:     '#64748B', // slate   — technologies/libraries
 };
 
 export const MEMORY_CATEGORIES: MemoryCategory[] = ['PREFERENCE', 'CONTEXT', 'INTEREST', 'TOOLING'];

@@ -9,9 +9,10 @@ interface GraphStore {
   loading: boolean;
 
   fetchGraph: (projectId?: string) => Promise<void>;
-  addNode: (label: string, category: NodeCategory, x?: number, y?: number, projectId?: string) => Promise<GraphNode>;
+  addNode: (label: string, category: NodeCategory, x?: number, y?: number, projectId?: string, metadata?: string) => Promise<GraphNode>;
   addEdge: (sourceId: string, targetId: string, label?: string, projectId?: string) => Promise<GraphEdge>;
   updateNodePositions: (positions: { id: string; x: number; y: number }[]) => Promise<void>;
+  updateNodeMetadata: (id: string, metadata: string) => Promise<void>;
   deleteNode: (id: string) => Promise<void>;
   deleteEdge: (id: string) => Promise<void>;
   importGraphData: (nodes: Omit<GraphNode, 'id' | 'created_at' | 'updated_at'>[], edges: { source_id: string; target_id: string; label?: string }[]) => Promise<void>;
@@ -33,10 +34,10 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
     }
   },
 
-  addNode: async (label, category, x = 0, y = 0, projectId?: string) => {
+  addNode: async (label, category, x = 0, y = 0, projectId?: string, metadata?: string) => {
     const color = NODE_CATEGORY_COLORS[category];
     const node = await invoke<GraphNode>('create_graph_node', {
-      input: { label, category, color, x, y, project_id: projectId },
+      input: { label, category, color, x, y, project_id: projectId, metadata },
     });
     set((state) => ({ nodes: [...state.nodes, node] }));
     return node;
@@ -57,6 +58,13 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
         const pos = positions.find((p) => p.id === n.id);
         return pos ? { ...n, x: pos.x, y: pos.y } : n;
       }),
+    }));
+  },
+
+  updateNodeMetadata: async (id, metadata) => {
+    await invoke('update_node_metadata', { id, metadata });
+    set((state) => ({
+      nodes: state.nodes.map((n) => (n.id === id ? { ...n, metadata } : n)),
     }));
   },
 
