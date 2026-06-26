@@ -4,7 +4,8 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
-import { Copy, RotateCcw, Edit2, Check, ChevronDown, ChevronUp, Brain, GitBranch, FileText, Image as ImageIcon, Wrench } from 'lucide-react';
+import { Copy, RotateCcw, Edit2, Check, ChevronDown, ChevronUp, Brain, GitBranch, FileText, Image as ImageIcon, Wrench, ExternalLink } from 'lucide-react';
+import { useCanvasStore } from '@/stores/canvasStore';
 
 export const MarkdownRenderer = ({ content }: { content: string }) => {
   return (
@@ -14,9 +15,52 @@ export const MarkdownRenderer = ({ content }: { content: string }) => {
       components={{
         code: ({ className, children, ...props }) => {
           const isBlock = className?.includes('language-');
+          const language = className?.replace('language-', '') || '';
+          const contentStr = String(children);
+          
+          const numLines = contentStr.split('\n').length;
+          const isExplicitArtifact = ['canvas', 'artifact'].includes(language.toLowerCase());
+          const isAppArtifact = ['html', 'react', 'mermaid'].includes(language.toLowerCase()) && numLines > 15;
+          const isArtifact = isBlock && (isExplicitArtifact || isAppArtifact);
+
+          if (isArtifact) {
+            const artifact = {
+              id: Math.random().toString(36).substring(7),
+              title: `${language.toUpperCase() || 'Code'} Artifact`,
+              type: language || 'code',
+              content: contentStr
+            };
+            
+            return (
+              <div className="my-4 p-5 border border-zinc-200 rounded-xl bg-zinc-50/50 shadow-sm flex flex-col sm:flex-row items-center sm:items-start gap-4">
+                <div className="p-3 bg-white rounded-lg border border-zinc-100 shadow-sm shrink-0">
+                  <FileText className="w-6 h-6 text-blue-500" />
+                </div>
+                <div className="flex-1 text-center sm:text-left">
+                  <div className="font-medium text-zinc-800 mb-1">{artifact.title}</div>
+                  <div className="text-xs text-zinc-500 mb-3 max-w-sm">
+                    Interactive content available. Open in canvas to view, execute, or download.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      useCanvasStore.getState().openArtifact(artifact);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-800 text-sm font-medium rounded-lg transition-colors shadow-sm"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    Open Canvas
+                  </button>
+                </div>
+              </div>
+            );
+          }
+
           return isBlock ? (
             <div className="relative my-3">
-              <pre className="bg-zinc-950 text-zinc-100 rounded-lg px-4 py-3 overflow-x-auto text-xs font-mono leading-relaxed">
+              <pre className="bg-zinc-950 text-zinc-100 rounded-lg px-4 py-3 overflow-x-auto text-xs font-mono leading-relaxed custom-scrollbar">
                 <code>{children}</code>
               </pre>
               <button
