@@ -13,7 +13,7 @@ interface MessageStore {
 
   setLastContextUsage: (usage: { used: number; total: number } | null) => void;
   fetchMessages: (sessionId: string) => Promise<void>;
-  addMessage: (sessionId: string, role: 'user' | 'assistant' | 'system', content: string, modelId?: string, parentId?: string | null, attachments?: string) => Promise<Message>;
+  addMessage: (sessionId: string, role: 'user' | 'assistant' | 'system' | 'tool', content: string, modelId?: string, parentId?: string | null, attachments?: string, tool_calls?: string, tool_call_id?: string) => Promise<Message>;
   setActiveVariant: (sessionId: string, parentId: string, childId: string) => void;
   updateMessage: (id: string, content: string) => Promise<void>;
   deleteMessage: (id: string, sessionId: string) => Promise<void>;
@@ -44,9 +44,9 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
     }));
   },
 
-  addMessage: async (sessionId, role, content, modelId, parentId, attachments) => {
+  addMessage: async (sessionId, role, content, modelId, parentId, attachments, tool_calls, tool_call_id) => {
     const msg = await invoke<Message>('create_message', {
-      input: { session_id: sessionId, role, content, model_id: modelId, parent_id: parentId, attachments },
+      input: { session_id: sessionId, role, content, model_id: modelId, parent_id: parentId, attachments, tool_calls, tool_call_id },
     });
     set((state) => {
       // If we are adding a variant (it shares a parent with existing messages),

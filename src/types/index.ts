@@ -59,13 +59,15 @@ export interface Attachment {
 export interface Message {
   id: string;
   session_id: string;
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
   model_id?: string;
   created_at: string;
   sort_order: number;
   parent_id?: string | null;
   attachments?: string;
+  tool_calls?: string;
+  tool_call_id?: string;
 }
 
 export interface Memory {
@@ -161,16 +163,40 @@ export interface ModelInfo {
   capabilities?: string[];
 }
 
+export interface ToolCall {
+  id: string;
+  type: 'function';
+  function: {
+    name: string;
+    arguments: Record<string, any>;
+  };
+}
+
+export interface ToolDefinition {
+  type: 'function';
+  function: {
+    name: string;
+    description: string;
+    parameters: {
+      type: 'object';
+      properties: Record<string, any>;
+      required?: string[];
+    };
+  };
+}
+
 export interface ChatMessage {
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
   images?: string[];
+  tool_calls?: ToolCall[];
 }
 
 export interface ChatRequest {
   model: string;
   messages: ChatMessage[];
   stream?: boolean;
+  tools?: ToolDefinition[];
 }
 
 export interface ChatResponse {
@@ -184,6 +210,7 @@ export interface StreamChunk {
   done: boolean;
   prompt_eval_count?: number;
   eval_count?: number;
+  tool_calls?: ToolCall[];
 }
 
 export interface HealthCheckResult {

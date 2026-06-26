@@ -104,6 +104,14 @@ impl Database {
             )?;
         }
 
+        if version < 9 {
+            conn.execute_batch(include_str!("../migrations/009_tool_calls.sql"))?;
+            conn.execute(
+                "INSERT INTO schema_version (version, applied_at) VALUES (9, datetime('now'))",
+                [],
+            )?;
+        }
+
         Ok(())
     }
 }

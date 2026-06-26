@@ -5,11 +5,14 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { readFile } from '@tauri-apps/plugin-fs';
 import { cn } from '@/utils';
 import { ModelSelector } from './ModelSelector';
+import { ActionMenu } from './ActionMenu';
 import { AttachmentThumbnail } from './AttachmentThumbnail';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useSessionStore } from '@/stores/sessionStore';
 import type { ModelInfo, Attachment } from '@/types';
 
 interface ChatInputProps {
+  sessionId: string;
   onSend: (content: string, attachments?: string) => void;
   onStop?: () => void;
   isStreaming?: boolean;
@@ -24,6 +27,7 @@ interface ChatInputProps {
 }
 
 export function ChatInput({
+  sessionId,
   onSend,
   onStop,
   isStreaming,
@@ -37,9 +41,12 @@ export function ChatInput({
   baseContextTokens = 0,
 }: ChatInputProps) {
   const { settings } = useSettingsStore();
+  const { activeToolsBySession, toggleTool } = useSessionStore();
   const [value, setValue] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const selectedTools = activeToolsBySession[sessionId] || [];
 
   const activeModelInfo = models.find(m => m.id === selectedModelId);
   // Default to true if capabilities are unknown, to be safe/permissive
@@ -193,15 +200,13 @@ export function ChatInput({
         {/* Bottom bar */}
         <div className="flex items-center justify-between px-3 pb-3">
           <div className="flex items-center gap-1">
-            {/* Attachment button */}
-            <button
-              onClick={handleAttach}
-              className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 transition-colors"
-              aria-label="Attach file"
-              title="Attach file"
-            >
-              <Paperclip className="h-4 w-4" />
-            </button>
+            <ActionMenu
+              sessionId={sessionId}
+              onAttach={handleAttach}
+              selectedTools={selectedTools}
+              onToggleTool={(tool) => toggleTool(sessionId, tool)}
+              direction={dropdownDirection}
+            />
 
             {/* Model selector */}
             <ModelSelector

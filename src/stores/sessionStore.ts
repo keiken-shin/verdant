@@ -15,12 +15,16 @@ interface SessionStore {
   deleteSession: (id: string) => Promise<void>;
   searchSessions: (query: string) => Promise<Session[]>;
   forkSession: (sessionId: string, messageIds: string[]) => Promise<string>;
+  
+  activeToolsBySession: Record<string, string[]>;
+  toggleTool: (sessionId: string, tool: string) => void;
 }
 
 export const useSessionStore = create<SessionStore>((set, get) => ({
   sessions: [],
   activeSessionId: null,
   loading: false,
+  activeToolsBySession: {},
 
   fetchSessions: async () => {
     set({ loading: true });
@@ -82,4 +86,18 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((state) => ({ sessions: [newSession, ...state.sessions] }));
     return newSession.id;
   },
+
+  toggleTool: (sessionId: string, tool: string) => {
+    set((state) => {
+      const active = state.activeToolsBySession[sessionId] || [];
+      const isSelected = active.includes(tool);
+      const newActive = isSelected ? active.filter(t => t !== tool) : [...active, tool];
+      return {
+        activeToolsBySession: {
+          ...state.activeToolsBySession,
+          [sessionId]: newActive
+        }
+      };
+    });
+  }
 }));

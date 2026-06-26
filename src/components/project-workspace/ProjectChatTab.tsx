@@ -40,6 +40,7 @@ export function ProjectChatTab({ projectId, projectSessions }: ProjectChatTabPro
     <div className="px-10 py-8 max-w-3xl mx-auto w-full flex flex-col gap-8">
       <div>
         <ChatInput
+          sessionId=""
           onSend={handleStart}
           models={models}
           selectedModelId={activeModelId}
