@@ -158,7 +158,7 @@ export function AssistantMessageGroup({
   const [copied, setCopied] = useState(false);
   const [timelineExpanded, setTimelineExpanded] = useState(false);
 
-  if (!messages || messages.length === 0) return null;
+  if ((!messages || messages.length === 0) && streamingContent === undefined) return null;
 
   // Compile timeline events
   const events: any[] = [];

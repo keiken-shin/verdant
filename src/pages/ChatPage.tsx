@@ -20,8 +20,11 @@ import { useProjectStore } from '@/stores/projectStore';
 import { buildProjectContext } from '@/services/sessionContext';
 import { useModels } from '@/hooks/useModels';
 import type { Message, ChatMessage } from '@/types';
+import { cn } from '@/utils';
 
 import { providerRegistry } from '@/providers/registry';
+import { useCanvasStore } from '@/stores/canvasStore';
+import { CanvasPanel } from '@/components/canvas/CanvasPanel';
 
 const PROMPT_SUGGESTIONS = [
   "Explain pattern languages in your own words.",
@@ -72,6 +75,7 @@ export function ChatPage() {
   const { settings } = useSettingsStore();
   const { projects, filesByProject, fetchProjectFiles } = useProjectStore();
   const { models, modelsLoading } = useModels();
+  const { isOpen: isCanvasOpen } = useCanvasStore();
 
   const [streamingParentId, setStreamingParentId] = useState<string | null>(null);
 
@@ -119,6 +123,10 @@ export function ChatPage() {
       fetchMessages(sessionId);
     }
   }, [sessionId, fetchMessages, messagesBySession]);
+
+  useEffect(() => {
+    useCanvasStore.getState().closeCanvas();
+  }, [sessionId]);
 
   // Build tree and active path
   const sessionVariants = sessionId ? (activeVariantIds[sessionId] || {}) : {};
@@ -322,6 +330,10 @@ export function ChatPage() {
       ? availableTools.filter(t => selectedTools.includes(t.function.name))
       : undefined;
 
+    if (selectedTools.includes('canvas')) {
+      history.unshift({ role: 'system', content: 'You have access to an interactive Canvas panel. When asked to create an application, component, or document, you MUST provide the ENTIRE, completely self-contained code in a SINGLE markdown fenced code block (e.g. ```html or ```react). DO NOT break the code into multiple step-by-step snippets or provide partial updates. Output the final, working code all at once so it can be rendered as a single interactive Canvas.' });
+    }
+
     const runStreamLoop = async (currentHistory: typeof history, parentMessageId: string) => {
       setIsStreaming(true);
       setStreamingSessionId(sid);
@@ -465,9 +477,19 @@ export function ChatPage() {
             if (systemMsg) history.unshift({ role: 'system', content: systemMsg });
           }
         }
+        
+        const state = useSessionStore.getState();
+        const selectedTools = state.activeToolsBySession[sessionId] || [];
+        const activeTools = selectedTools.length > 0 
+          ? availableTools.filter(t => selectedTools.includes(t.function.name))
+          : undefined;
+
+        if (selectedTools.includes('canvas')) {
+          history.unshift({ role: 'system', content: 'You have access to an interactive Canvas panel. When asked to create an application, component, or document, you MUST provide the ENTIRE, completely self-contained code in a SINGLE markdown fenced code block (e.g. ```html or ```react). DO NOT break the code into multiple step-by-step snippets or provide partial updates. Output the final, working code all at once so it can be rendered as a single interactive Canvas.' });
+        }
 
         await provider.streamChat(
-          { model: activeModelId || 'llama3', messages: history, stream: true },
+          { model: activeModelId || 'llama3', messages: history, stream: true, tools: activeTools },
           (chunk) => { if (chunk.content) appendStreamingContent(chunk.content); },
           abortCtrl.signal
         );
@@ -564,7 +586,12 @@ export function ChatPage() {
   const modelName = activeModelId?.split(':')[0] || 'model';
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex w-full h-full bg-white relative overflow-hidden">
+      {/* Main Chat Column */}
+      <div className={cn(
+        "flex flex-col h-full bg-white/50 relative transition-all duration-300 ease-in-out",
+        isCanvasOpen ? "w-1/2 min-w-[400px] border-r border-zinc-200" : "w-full flex-1"
+      )}>
       {/* Header */}
       <div className="flex items-center justify-between px-8 py-4 border-b border-zinc-100">
         <div className="flex items-center gap-2 text-sm text-zinc-500">
@@ -762,7 +789,7 @@ export function ChatPage() {
                 return null;
               });
             })()}
-            {isStreaming && streamingSessionId === sessionId && activePath.length === 0 && (
+            {isStreaming && streamingSessionId === sessionId && (!activePath.length || activePath[activePath.length - 1].role === 'user') && (
                <AssistantMessageGroup messages={[]} streamingContent={streamingContent} />
             )}
             <div ref={messagesEndRef} />
@@ -793,6 +820,14 @@ export function ChatPage() {
           baseContextTokens={baseContextTokens}
         />
       </div>
+      </div>
+
+      {/* Artifact Canvas Column */}
+      {isCanvasOpen && (
+        <div className="w-1/2 min-w-[400px] flex-shrink-0 h-full bg-zinc-50 relative z-20">
+          <CanvasPanel />
+        </div>
+      )}
     </div>
   );
 }
