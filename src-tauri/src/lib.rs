@@ -1,5 +1,6 @@
 mod db;
 mod commands;
+mod tools;
 
 use db::Database;
 use tauri::Manager;
@@ -87,6 +88,8 @@ pub fn run() {
             commands::objects::read_object_base64,
             commands::objects::read_object_text,
             commands::objects::delete_object,
+            // Tools
+            tools::execute_tool,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

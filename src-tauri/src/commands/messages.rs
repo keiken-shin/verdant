@@ -14,6 +14,8 @@ pub struct Message {
     pub sort_order: i64,
     pub parent_id: Option<String>,
     pub attachments: Option<String>,
+    pub tool_calls: Option<String>,
+    pub tool_call_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -24,13 +26,15 @@ pub struct CreateMessageInput {
     pub model_id: Option<String>,
     pub parent_id: Option<String>,
     pub attachments: Option<String>,
+    pub tool_calls: Option<String>,
+    pub tool_call_id: Option<String>,
 }
 
 #[tauri::command]
 pub fn get_messages(session_id: String, db: State<Database>) -> Result<Vec<Message>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn.prepare(
-        "SELECT id, session_id, role, content, model_id, created_at, sort_order, parent_id, attachments
+        "SELECT id, session_id, role, content, model_id, created_at, sort_order, parent_id, attachments, tool_calls, tool_call_id
          FROM messages WHERE session_id = ?1 ORDER BY sort_order ASC"
     ).map_err(|e| e.to_string())?;
 
@@ -45,6 +49,8 @@ pub fn get_messages(session_id: String, db: State<Database>) -> Result<Vec<Messa
             sort_order: row.get(6)?,
             parent_id: row.get(7)?,
             attachments: row.get(8)?,
+            tool_calls: row.get(9)?,
+            tool_call_id: row.get(10)?,
         })
     }).map_err(|e| e.to_string())?;
 
@@ -65,9 +71,9 @@ pub fn create_message(input: CreateMessageInput, db: State<Database>) -> Result<
     ).unwrap_or(0);
 
     conn.execute(
-        "INSERT INTO messages (id, session_id, role, content, model_id, created_at, sort_order, parent_id, attachments)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-        params![id, input.session_id, input.role, input.content, input.model_id, now, sort_order, input.parent_id, input.attachments],
+        "INSERT INTO messages (id, session_id, role, content, model_id, created_at, sort_order, parent_id, attachments, tool_calls, tool_call_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        params![id, input.session_id, input.role, input.content, input.model_id, now, sort_order, input.parent_id, input.attachments, input.tool_calls, input.tool_call_id],
     ).map_err(|e| e.to_string())?;
 
     // Update session preview and updated_at
@@ -89,6 +95,8 @@ pub fn create_message(input: CreateMessageInput, db: State<Database>) -> Result<
         sort_order,
         parent_id: input.parent_id,
         attachments: input.attachments,
+        tool_calls: input.tool_calls,
+        tool_call_id: input.tool_call_id,
     })
 }
 

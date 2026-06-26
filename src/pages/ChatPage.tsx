@@ -6,17 +6,20 @@ import { Edit2, Trash2, Check, X, FolderKanban, ArrowDown } from 'lucide-react';
 
 import { ContextIndicator } from '@/components/chat/ContextIndicator';
 import { ChatInput } from '@/components/chat/ChatInput';
-import { UserMessage, AssistantMessage, StreamingMessage } from '@/components/chat/MessageBubbles';
+import { UserMessage } from '@/components/chat/MessageBubbles';
+import { AssistantMessageGroup } from '@/components/chat/AssistantMessageGroup';
+import { AssistantMessage, ToolMessage, StreamingMessage } from '@/components/chat/MessageBubbles';
 import { SectionLabel } from '@/components/ui/PageHeader';
 import { useSessionStore } from '@/stores/sessionStore';
 import { useMessageStore } from '@/stores/messageStore';
+import { usePersonaStore } from '@/stores/personaStore';
+import { executeToolCall, availableTools } from '@/services/toolExecution';
 import { useProviderStore } from '@/stores/providerStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useProjectStore } from '@/stores/projectStore';
-import { usePersonaStore } from '@/stores/personaStore';
 import { buildProjectContext } from '@/services/sessionContext';
 import { useModels } from '@/hooks/useModels';
-import type { Message } from '@/types';
+import type { Message, ChatMessage } from '@/types';
 
 import { providerRegistry } from '@/providers/registry';
 
@@ -230,7 +233,7 @@ export function ChatPage() {
       if (!tracer && sorted.indexOf(msg) > 0) tracer = sorted[sorted.indexOf(msg) - 1].id; // legacy fallback
     }
 
-    const history = await Promise.all(historyPath.map(async (m) => {
+    const history: ChatMessage[] = await Promise.all(historyPath.map(async (m) => {
       let content = m.content;
       let images: string[] = [];
 
@@ -252,9 +255,10 @@ export function ChatPage() {
       }
 
       return {
-        role: m.role as 'user' | 'assistant' | 'system',
+        role: m.role as 'user' | 'assistant' | 'system' | 'tool',
         content,
         images: images.length > 0 ? images : undefined,
+        tool_calls: m.tool_calls ? JSON.parse(m.tool_calls) : undefined,
       };
     }));
 
@@ -282,7 +286,7 @@ export function ChatPage() {
             modelId: settings.extraction_model || activeModelId || 'llama3',
             budgetTokens: Math.floor((settings.ollama_num_ctx || 32768) * 0.8), // Leave 20% for history and response
           });
-          if (systemMsg) history.unshift({ role: 'system', content: systemMsg, images: undefined });
+          if (systemMsg) history.unshift({ role: 'system', content: systemMsg });
         } catch (e) {
           console.error('Failed to build project context:', e);
         }
@@ -306,48 +310,87 @@ export function ChatPage() {
     
     const selectedPersona = personas.find(p => p.id === personaId) || personas.find(p => p.id === 'default-assistant');
     if (selectedPersona && selectedPersona.prompt) {
-      history.unshift({ role: 'system', content: selectedPersona.prompt, images: undefined });
+      history.unshift({ role: 'system', content: selectedPersona.prompt });
     }
 
     const abortCtrl = new AbortController();
     setAbortController(abortCtrl);
-    setIsStreaming(true);
-    setStreamingSessionId(sid);
-    setStreamingParentId(userMsg.id);
-    setStreamingContent('');
 
-    try {
-      await provider.streamChat(
-        { model: activeModelId, messages: history, stream: true },
-        (chunk) => {
-          if (chunk.content) appendStreamingContent(chunk.content);
-          if (chunk.done && typeof chunk.prompt_eval_count === 'number') {
-             useMessageStore.getState().setLastContextUsage({
-               used: chunk.prompt_eval_count + (chunk.eval_count || 0),
-               total: settings.ollama_num_ctx || 32768,
-             });
-          }
-        },
-        abortCtrl.signal
-      );
+    const state = useSessionStore.getState();
+    const selectedTools = state.activeToolsBySession[sid] || [];
+    const activeTools = selectedTools.length > 0 
+      ? availableTools.filter(t => selectedTools.includes(t.function.name))
+      : undefined;
 
-      // Finalize streaming message
-      const finalContent = useMessageStore.getState().streamingContent;
-      if (finalContent) {
-        await addMessage(sid, 'assistant', finalContent, activeModelId || undefined, userMsg.id);
-      }
-    } catch (e: unknown) {
-      if (e instanceof Error ? e.name !== 'AbortError' : true) {
-        const errorMsg = `Error: ${e instanceof Error ? e.message : (typeof e === 'string' ? e : 'Failed to get response')}`;
-        await addMessage(sid, 'assistant', errorMsg, activeModelId || undefined, userMsg.id);
-      }
-    } finally {
-      setIsStreaming(false);
-      setStreamingSessionId(null);
-      setStreamingParentId(null);
+    const runStreamLoop = async (currentHistory: typeof history, parentMessageId: string) => {
+      setIsStreaming(true);
+      setStreamingSessionId(sid);
+      setStreamingParentId(parentMessageId);
       setStreamingContent('');
-      setAbortController(null);
-    }
+      
+      let receivedToolCalls: import('@/types').ToolCall[] | undefined = undefined;
+
+      try {
+        await provider.streamChat(
+          { model: activeModelId, messages: currentHistory, stream: true, tools: activeTools },
+          (chunk) => {
+            if (chunk.content) appendStreamingContent(chunk.content);
+            if (chunk.tool_calls) receivedToolCalls = chunk.tool_calls;
+            if (chunk.done && typeof chunk.prompt_eval_count === 'number') {
+               useMessageStore.getState().setLastContextUsage({
+                 used: chunk.prompt_eval_count + (chunk.eval_count || 0),
+                 total: settings.ollama_num_ctx || 32768,
+               });
+            }
+          },
+          abortCtrl.signal
+        );
+
+        const finalContent = useMessageStore.getState().streamingContent;
+        let nextParentId = parentMessageId;
+        
+        if (finalContent || receivedToolCalls) {
+          const msg = await addMessage(sid, 'assistant', finalContent, activeModelId || undefined, parentMessageId, undefined, receivedToolCalls ? JSON.stringify(receivedToolCalls) : undefined);
+          nextParentId = msg.id;
+        }
+
+        const calls = receivedToolCalls as import('@/types').ToolCall[] | undefined;
+        if (calls && calls.length > 0) {
+          currentHistory.push({
+            role: 'assistant',
+            content: finalContent,
+            tool_calls: calls
+          });
+
+          for (const tc of calls) {
+            setStreamingContent(`Executing tool: ${tc.function.name}...`);
+            const res = await executeToolCall(tc);
+            const toolMsg = await addMessage(sid, 'tool', res, activeModelId || undefined, nextParentId, undefined, undefined, tc.id);
+            nextParentId = toolMsg.id;
+            
+            currentHistory.push({
+              role: 'tool',
+              content: res
+            });
+          }
+          
+          await runStreamLoop(currentHistory, nextParentId);
+        }
+      } catch (e: unknown) {
+        if (e instanceof Error ? e.name !== 'AbortError' : true) {
+          const errorMsg = `Error: ${e instanceof Error ? e.message : (typeof e === 'string' ? e : 'Failed to get response')}`;
+          await addMessage(sid, 'assistant', errorMsg, activeModelId || undefined, parentMessageId);
+        }
+      }
+    };
+    
+    await runStreamLoop(history, userMsg.id);
+
+    setIsStreaming(false);
+    setStreamingSessionId(null);
+    setStreamingParentId(null);
+    setStreamingContent('');
+    setAbortController(null);
   }, [activeModelId, sessionId, providers, settings.ollama_host, settings.extraction_model, createSession, updateSession, addMessage, fetchProjectFiles, setAbortController, setIsStreaming, setStreamingContent, appendStreamingContent, navigate, setStreamingSessionId]);
 
   // Auto-send an initial prompt passed from the project workspace (one-shot).
@@ -627,57 +670,101 @@ export function ChatPage() {
           </div>
         ) : (
           <div className="px-8 py-8 max-w-3xl mx-auto w-full">
-            {activePath
-              .filter(msg => {
-                // If we are currently streaming a new response for a parent IN THIS SESSION,
-                // hide the existing children (variants) of that parent so they don't
-                // show up above the streaming message.
+            {(() => {
+              const filteredPath = activePath.filter(msg => {
                 if (isStreaming && streamingSessionId === sessionId && streamingParentId) {
-                  // Hide if this message is an assistant response to the streaming parent
                   const parentId = msg.parent_id || (messages.indexOf(msg) > 0 ? messages[messages.indexOf(msg) - 1].id : null);
-                  if (parentId === streamingParentId && msg.role === 'assistant') {
+                  if (parentId === streamingParentId && (msg.role === 'assistant' || msg.role === 'tool')) {
                     return false;
                   }
                 }
                 return true;
-              })
-              .map((msg, i, filteredPath) => {
-              const parentId = msg.parent_id || (i > 0 ? filteredPath[i - 1].id : null);
-              const siblings = parentId ? variantsMap[parentId] || [] : [];
-              const variantIndex = siblings.findIndex(s => s.id === msg.id);
-              const totalVariants = siblings.length;
+              });
 
-              const handleSwitchVariant = (direction: 'prev' | 'next') => {
-                if (!parentId || !sessionId) return;
-                const newIndex = direction === 'prev' ? variantIndex - 1 : variantIndex + 1;
-                if (newIndex >= 0 && newIndex < totalVariants) {
-                  setActiveVariant(sessionId, parentId, siblings[newIndex].id);
+              const groupedMessages: { type: 'user' | 'assistant_group', msg?: Message, messages?: Message[], index: number }[] = [];
+              let currentGroup: { type: 'assistant_group', messages: Message[], index: number } | null = null;
+
+              filteredPath.forEach((msg, i) => {
+                if (msg.role === 'user') {
+                  if (currentGroup) {
+                    groupedMessages.push(currentGroup);
+                    currentGroup = null;
+                  }
+                  groupedMessages.push({ type: 'user', msg, index: i });
+                } else {
+                  if (!currentGroup) {
+                    currentGroup = { type: 'assistant_group', messages: [msg], index: i };
+                  } else {
+                    currentGroup.messages.push(msg);
+                  }
                 }
-              };
+              });
+              if (currentGroup) groupedMessages.push(currentGroup);
 
-              return msg.role === 'user' ? (
-                <UserMessage
-                  key={msg.id}
-                  message={msg}
-                  onEdit={handleEditMessage}
-                  variantIndex={variantIndex >= 0 ? variantIndex : undefined}
-                  totalVariants={totalVariants > 0 ? totalVariants : undefined}
-                  onSwitchVariant={handleSwitchVariant}
-                />
-              ) : (
-                <AssistantMessage
-                  key={msg.id}
-                  message={msg}
-                  isLast={i === filteredPath.length - 1}
-                  onRegenerate={handleRegenerate}
-                  variantIndex={variantIndex >= 0 ? variantIndex : undefined}
-                  totalVariants={totalVariants > 0 ? totalVariants : undefined}
-                  onSwitchVariant={handleSwitchVariant}
-                  onFork={() => handleFork(msg.id)}
-                />
-              );
-            })}
-            {isStreaming && streamingSessionId === sessionId && <StreamingMessage content={streamingContent} />}
+              return groupedMessages.map((group, groupIdx) => {
+                if (group.type === 'user' && group.msg) {
+                  const msg = group.msg;
+                  const i = group.index;
+                  const parentId = msg.parent_id || (i > 0 ? filteredPath[i - 1].id : null);
+                  const siblings = parentId ? variantsMap[parentId] || [] : [];
+                  const variantIndex = siblings.findIndex(s => s.id === msg.id);
+                  const totalVariants = siblings.length;
+                  const handleSwitchVariant = (direction: 'prev' | 'next') => {
+                    if (!parentId || !sessionId) return;
+                    const newIndex = direction === 'prev' ? variantIndex - 1 : variantIndex + 1;
+                    if (newIndex >= 0 && newIndex < totalVariants) {
+                      setActiveVariant(sessionId, parentId, siblings[newIndex].id);
+                    }
+                  };
+                  return (
+                    <UserMessage
+                      key={msg.id}
+                      message={msg}
+                      onEdit={handleEditMessage}
+                      variantIndex={variantIndex >= 0 ? variantIndex : undefined}
+                      totalVariants={totalVariants > 0 ? totalVariants : undefined}
+                      onSwitchVariant={handleSwitchVariant}
+                    />
+                  );
+                } else if (group.type === 'assistant_group' && group.messages) {
+                  const firstMsg = group.messages[0];
+                  const i = group.index;
+                  const parentId = firstMsg.parent_id || (i > 0 ? filteredPath[i - 1].id : null);
+                  const siblings = parentId ? variantsMap[parentId] || [] : [];
+                  const variantIndex = siblings.findIndex(s => s.id === firstMsg.id);
+                  const totalVariants = siblings.length;
+                  const handleSwitchVariant = (direction: 'prev' | 'next') => {
+                    if (!parentId || !sessionId) return;
+                    const newIndex = direction === 'prev' ? variantIndex - 1 : variantIndex + 1;
+                    if (newIndex >= 0 && newIndex < totalVariants) {
+                      setActiveVariant(sessionId, parentId, siblings[newIndex].id);
+                    }
+                  };
+                  
+                  // If this is the last group and we are streaming for it, pass the streaming content
+                  const isLastGroup = groupIdx === groupedMessages.length - 1;
+                  const isStreamingThis = isLastGroup && isStreaming && streamingSessionId === sessionId;
+
+                  return (
+                    <AssistantMessageGroup
+                      key={firstMsg.id}
+                      messages={group.messages}
+                      streamingContent={isStreamingThis ? streamingContent : undefined}
+                      isLast={isLastGroup && !isStreaming}
+                      onRegenerate={handleRegenerate}
+                      variantIndex={variantIndex >= 0 ? variantIndex : undefined}
+                      totalVariants={totalVariants > 0 ? totalVariants : undefined}
+                      onSwitchVariant={handleSwitchVariant}
+                      onFork={handleFork}
+                    />
+                  );
+                }
+                return null;
+              });
+            })()}
+            {isStreaming && streamingSessionId === sessionId && activePath.length === 0 && (
+               <AssistantMessageGroup messages={[]} streamingContent={streamingContent} />
+            )}
             <div ref={messagesEndRef} />
           </div>
         )}
@@ -695,7 +782,8 @@ export function ChatPage() {
           </button>
         )}
         <ChatInput
-          onSend={handleSend}
+          sessionId={sessionId || ''}
+          onSend={(c, a) => handleSend(c, a, undefined)}
           onStop={stopStreaming}
           isStreaming={isStreaming && streamingSessionId === sessionId}
           models={models}

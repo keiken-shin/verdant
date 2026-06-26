@@ -20,6 +20,7 @@ interface OllamaChatResponse {
   message: {
     role: string;
     content: string;
+    tool_calls?: any[];
   };
   done: boolean;
   done_reason?: string;
@@ -124,6 +125,7 @@ export class OllamaProvider implements LLMProvider {
         model: request.model,
         messages: request.messages,
         stream: false,
+        tools: request.tools,
         options: { num_ctx: useSettingsStore.getState().settings.ollama_num_ctx || 32768 },
       }),
     });
@@ -145,7 +147,8 @@ export class OllamaProvider implements LLMProvider {
       content: finalContent,
       model: data.model,
       done: data.done,
-    };
+      tool_calls: data.message?.tool_calls,
+    } as ChatResponse;
   }
 
   async streamChat(
@@ -160,6 +163,7 @@ export class OllamaProvider implements LLMProvider {
         model: request.model,
         messages: request.messages,
         stream: true,
+        tools: request.tools,
         options: { num_ctx: useSettingsStore.getState().settings.ollama_num_ctx || 32768 },
       }),
       signal,
@@ -225,6 +229,7 @@ export class OllamaProvider implements LLMProvider {
             done: chunk.done,
             prompt_eval_count: (chunk as any).prompt_eval_count,
             eval_count: (chunk as any).eval_count,
+            tool_calls: chunk.message?.tool_calls,
           });
           if (chunk.done) {
              // ensure we close the tag if it ended abruptly

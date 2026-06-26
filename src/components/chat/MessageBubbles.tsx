@@ -4,9 +4,9 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
-import { Copy, RotateCcw, Edit2, Check, ChevronDown, ChevronUp, Brain, GitBranch, FileText, Image as ImageIcon } from 'lucide-react';
+import { Copy, RotateCcw, Edit2, Check, ChevronDown, ChevronUp, Brain, GitBranch, FileText, Image as ImageIcon, Wrench } from 'lucide-react';
 
-const MarkdownRenderer = ({ content }: { content: string }) => {
+export const MarkdownRenderer = ({ content }: { content: string }) => {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkMath]}
@@ -193,9 +193,10 @@ interface AssistantMessageProps {
   variantIndex?: number;
   totalVariants?: number;
   onSwitchVariant?: (direction: 'prev' | 'next') => void;
+  isIntermediate?: boolean;
 }
 
-export function AssistantMessage({ message, onCopy, onRegenerate, onFork, isLast, variantIndex, totalVariants, onSwitchVariant }: AssistantMessageProps) {
+export function AssistantMessage({ message, onCopy, onRegenerate, onFork, isLast, variantIndex, totalVariants, onSwitchVariant, isIntermediate }: AssistantMessageProps) {
   const [copied, setCopied] = useState(false);
   const [thinkingExpanded, setThinkingExpanded] = useState(false);
 
@@ -210,8 +211,13 @@ export function AssistantMessage({ message, onCopy, onRegenerate, onFork, isLast
     onCopy?.();
   };
 
+  let toolCalls = [];
+  try {
+    if (message.tool_calls) toolCalls = JSON.parse(message.tool_calls);
+  } catch (e) {}
+
   return (
-    <div className="mb-6 group">
+    <div className={cn("group", isIntermediate ? "mb-2" : "mb-6")}>
       {thinking && (
         <div className="mb-3 border-l-2 border-[var(--color-verdant-primary)] bg-[var(--color-verdant-sidebar-bg)]/40 pl-4 py-2 pr-3 rounded-r-lg max-w-none">
           <button
@@ -234,13 +240,23 @@ export function AssistantMessage({ message, onCopy, onRegenerate, onFork, isLast
         </div>
       )}
 
+      {toolCalls.length > 0 && (
+        <div className="mb-3 border-l-2 border-orange-500 bg-orange-50/50 pl-4 py-2 pr-3 rounded-r-lg max-w-none text-xs text-orange-900">
+          <div className="flex items-center gap-2 font-semibold">
+            <Wrench className="h-3.5 w-3.5 text-orange-500" />
+            Used tools: {toolCalls.map((tc: any) => tc.function.name).join(', ')}
+          </div>
+        </div>
+      )}
+
       <div className="prose prose-sm max-w-none text-zinc-700">
         <MarkdownRenderer content={mainContent} />
       </div>
 
       {/* Action buttons */}
-      <div className="flex items-center justify-between mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-        <div className="flex items-center gap-2">
+      {!isIntermediate && (
+        <div className="flex items-center justify-between mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-2">
           <button
           onClick={handleCopy}
           className="flex items-center justify-center p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded transition-colors"
@@ -294,6 +310,7 @@ export function AssistantMessage({ message, onCopy, onRegenerate, onFork, isLast
           {new Intl.DateTimeFormat('default', { hour: 'numeric', minute: '2-digit' }).format(new Date(message.created_at))}
         </div>
       </div>
+      )}
     </div>
   );
 }
@@ -349,6 +366,21 @@ export function StreamingMessage({ content }: StreamingMessageProps) {
             </div>
           )
         )}
+      </div>
+    </div>
+  );
+}
+
+export function ToolMessage({ message }: { message: Message }) {
+  if (!message) return null;
+  return (
+    <div className="mb-2">
+      <div className="text-xs font-mono text-zinc-500 bg-zinc-50 p-3 rounded-lg border border-zinc-200 overflow-x-auto opacity-75 hover:opacity-100 transition-opacity">
+        <div className="font-semibold mb-1 text-zinc-700 flex items-center gap-2">
+          <Wrench className="h-3.5 w-3.5 text-zinc-500" />
+          Tool Result ({message.tool_call_id || 'unknown'})
+        </div>
+        <pre className="whitespace-pre-wrap">{message.content}</pre>
       </div>
     </div>
   );
