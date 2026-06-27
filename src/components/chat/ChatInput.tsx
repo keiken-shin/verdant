@@ -44,6 +44,7 @@ export function ChatInput({
   const { activeToolsBySession, toggleTool } = useSessionStore();
   const [value, setValue] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const selectedTools = activeToolsBySession[sessionId] || [];
@@ -115,6 +116,79 @@ export function ChatInput({
     setAttachments((prev) => prev.filter((a) => a.id !== id));
   };
 
+  const processDomFiles = async (files: File[]) => {
+    for (const file of files) {
+      try {
+        const buffer = await file.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        const name = file.name;
+        const ext = name.includes('.') ? name.split('.').pop()!.toLowerCase() : '';
+        const type = ['png', 'jpg', 'jpeg', 'webp'].includes(ext) || file.type.startsWith('image/') ? 'image' : 'text';
+        
+        const objectId = await invoke<string>('store_object', { data: Array.from(bytes) });
+        
+        const newAtt: Attachment = {
+          id: Math.random().toString(36).substring(7),
+          type,
+          name,
+          objectId,
+        };
+        setAttachments((prev) => [...prev, newAtt]);
+      } catch (e) {
+        console.error('Failed to attach DOM file:', e);
+      }
+    }
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const files = Array.from(e.dataTransfer.files);
+      await processDomFiles(files);
+    }
+  };
+
+  const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (e.clipboardData.files && e.clipboardData.files.length > 0) {
+      e.preventDefault();
+      const files = Array.from(e.clipboardData.files);
+      await processDomFiles(files);
+      return;
+    }
+
+    const text = e.clipboardData.getData('text');
+    if (text && text.length > 10000) {
+      e.preventDefault();
+      const blob = new Blob([text], { type: 'text/plain' });
+      const file = new File([blob], 'pasted_text.txt', { type: 'text/plain' });
+      await processDomFiles([file]);
+      return;
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -131,7 +205,21 @@ export function ChatInput({
   }, [value]);
 
   return (
-    <div className="w-full max-w-2xl mx-auto flex flex-col gap-2">
+    <div 
+      className="w-full max-w-2xl mx-auto flex flex-col gap-2 relative"
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {isDragging && (
+        <div className="absolute inset-0 z-50 rounded-xl border-2 border-dashed border-blue-400 bg-blue-50/90 flex items-center justify-center pointer-events-none">
+          <div className="flex flex-col items-center gap-2 text-blue-600 bg-white/80 p-4 rounded-xl shadow-sm">
+            <ArrowUp className="w-6 h-6" />
+            <span className="font-medium text-sm">Drop files to attach</span>
+          </div>
+        </div>
+      )}
       {isContextWarning && (
         <div className={cn(
           "px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-2",
@@ -191,6 +279,7 @@ export function ChatInput({
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           placeholder={placeholder}
           disabled={disabled}
           rows={1}

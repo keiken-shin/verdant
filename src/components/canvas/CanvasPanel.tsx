@@ -4,8 +4,9 @@ import { useCanvasStore } from '@/stores/canvasStore';
 import { cn } from '@/utils';
 
 export function CanvasPanel() {
-  const { isOpen, activeArtifact, closeCanvas } = useCanvasStore();
-  const [viewMode, setViewMode] = useState<'code' | 'preview'>('preview');
+  const { isOpen, activeArtifact, closeCanvas, versions, setVersion } = useCanvasStore();
+  const [viewMode, setViewMode] = useState<'code' | 'preview'>('code');
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   // If there's no active artifact or we are closed, render nothing or hidden
@@ -46,13 +47,61 @@ export function CanvasPanel() {
     URL.revokeObjectURL(url);
   };
 
+  const artifactVersions = versions.filter(v => (v.identifier || v.type) === (activeArtifact.identifier || activeArtifact.type));
+  const currentIndex = artifactVersions.findIndex(v => v.id === activeArtifact.id);
+  const displayVersion = currentIndex >= 0 ? currentIndex + 1 : 1;
+  const isLatest = currentIndex === artifactVersions.length - 1;
+
   return (
     <div className="flex flex-col h-full w-full bg-white border-l border-zinc-200 shadow-sm animate-in slide-in-from-right-8 duration-300">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 bg-zinc-50/50">
         <div className="flex items-center gap-3 overflow-hidden">
-          <div className="font-medium text-sm text-zinc-800 truncate" title={activeArtifact.title}>
-            {activeArtifact.title}
+          <div className="flex flex-col gap-0.5">
+            <div className="font-medium text-sm text-zinc-800 truncate" title={activeArtifact.title}>
+              {activeArtifact.title}
+            </div>
+            
+            {/* Version Dropdown */}
+            {artifactVersions.length > 0 && (
+              <div className="relative">
+                <button 
+                  onClick={() => setDropdownOpen(!dropdownOpen)}
+                  className="flex items-center gap-1 text-xs font-medium text-zinc-500 hover:text-zinc-800 transition-colors"
+                >
+                  v{displayVersion} {isLatest && '· Latest'}
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-70"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                
+                {dropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setDropdownOpen(false)} />
+                    <div className="absolute top-full left-0 mt-1 w-32 bg-white border border-zinc-200 rounded-lg shadow-lg z-20 py-1 flex flex-col">
+                      {artifactVersions.map((v, i) => {
+                        const vNum = i + 1;
+                        const isThisLatest = i === artifactVersions.length - 1;
+                        return (
+                          <button
+                            key={v.id}
+                            onClick={() => {
+                              setVersion(v.id);
+                              setDropdownOpen(false);
+                            }}
+                            className={cn(
+                              "text-left px-3 py-1.5 text-xs font-medium hover:bg-zinc-50 transition-colors flex items-center justify-between",
+                              v.id === activeArtifact.id ? "text-blue-600 bg-blue-50/50" : "text-zinc-700"
+                            )}
+                          >
+                            <span>Version {vNum}</span>
+                            {isThisLatest && <span className="text-[10px] text-zinc-400 font-normal">Latest</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

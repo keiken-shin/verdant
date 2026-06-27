@@ -142,6 +142,7 @@ interface AssistantMessageGroupProps {
   variantIndex?: number;
   totalVariants?: number;
   onSwitchVariant?: (direction: 'prev' | 'next') => void;
+  messageIndex?: number;
 }
 
 export function AssistantMessageGroup({ 
@@ -153,7 +154,8 @@ export function AssistantMessageGroup({
   isLast, 
   variantIndex, 
   totalVariants, 
-  onSwitchVariant 
+  onSwitchVariant,
+  messageIndex
 }: AssistantMessageGroupProps) {
   const [copied, setCopied] = useState(false);
   const [timelineExpanded, setTimelineExpanded] = useState(false);
@@ -306,7 +308,12 @@ export function AssistantMessageGroup({
 
       {finalContent ? (
         <div className="prose prose-sm max-w-none text-zinc-700 mt-2">
-          <MarkdownRenderer content={finalContent} />
+          <MarkdownRenderer 
+            content={finalContent} 
+            messageId={finalMessage ? (finalMessage as Message).id : `stream-idx-${messageIndex}`}
+            messageIndex={messageIndex}
+            isStreaming={streamingContent !== undefined}
+          />
         </div>
       ) : (
         !isStreamThinking && (

@@ -75,7 +75,7 @@ export function ChatPage() {
   const { settings } = useSettingsStore();
   const { projects, filesByProject, fetchProjectFiles } = useProjectStore();
   const { models, modelsLoading } = useModels();
-  const { isOpen: isCanvasOpen } = useCanvasStore();
+  const isCanvasOpen = useCanvasStore(state => state.isOpen);
 
   const [streamingParentId, setStreamingParentId] = useState<string | null>(null);
 
@@ -125,7 +125,7 @@ export function ChatPage() {
   }, [sessionId, fetchMessages, messagesBySession]);
 
   useEffect(() => {
-    useCanvasStore.getState().closeCanvas();
+    useCanvasStore.getState().clearSession();
   }, [sessionId]);
 
   // Build tree and active path
@@ -331,7 +331,7 @@ export function ChatPage() {
       : undefined;
 
     if (selectedTools.includes('canvas')) {
-      history.unshift({ role: 'system', content: 'You have access to an interactive Canvas panel. When asked to create an application, component, or document, you MUST provide the ENTIRE, completely self-contained code in a SINGLE markdown fenced code block (e.g. ```html or ```react). DO NOT break the code into multiple step-by-step snippets or provide partial updates. Output the final, working code all at once so it can be rendered as a single interactive Canvas.' });
+      history.unshift({ role: 'system', content: 'You have access to an interactive Canvas panel. When asked to create an application, component, or document, you MUST provide the ENTIRE, completely self-contained code in a SINGLE markdown fenced code block (e.g. ```html or ```react). DO NOT break the code into multiple step-by-step snippets or provide partial updates. Output the final, working code all at once so it can be rendered as a single interactive Canvas. IMPORTANT: To help the system track files, you MUST start the code block with a filename comment on the very first line (e.g. <!-- filename="app.html" --> or // filename="utils.js").' });
     }
 
     const runStreamLoop = async (currentHistory: typeof history, parentMessageId: string) => {
@@ -485,7 +485,7 @@ export function ChatPage() {
           : undefined;
 
         if (selectedTools.includes('canvas')) {
-          history.unshift({ role: 'system', content: 'You have access to an interactive Canvas panel. When asked to create an application, component, or document, you MUST provide the ENTIRE, completely self-contained code in a SINGLE markdown fenced code block (e.g. ```html or ```react). DO NOT break the code into multiple step-by-step snippets or provide partial updates. Output the final, working code all at once so it can be rendered as a single interactive Canvas.' });
+          history.unshift({ role: 'system', content: 'You have access to an interactive Canvas panel. When asked to create an application, component, or document, you MUST provide the ENTIRE, completely self-contained code in a SINGLE markdown fenced code block (e.g. ```html or ```react). DO NOT break the code into multiple step-by-step snippets or provide partial updates. Output the final, working code all at once so it can be rendered as a single interactive Canvas. IMPORTANT: To help the system track files, you MUST start the code block with a filename comment on the very first line (e.g. <!-- filename="app.html" --> or // filename="utils.js").' });
         }
 
         await provider.streamChat(
@@ -776,6 +776,7 @@ export function ChatPage() {
                     <AssistantMessageGroup
                       key={firstMsg.id}
                       messages={group.messages}
+                      messageIndex={activePath.findIndex(m => m.id === firstMsg.id)}
                       streamingContent={isStreamingThis ? streamingContent : undefined}
                       isLast={isLastGroup && !isStreaming}
                       onRegenerate={handleRegenerate}
@@ -790,7 +791,7 @@ export function ChatPage() {
               });
             })()}
             {isStreaming && streamingSessionId === sessionId && (!activePath.length || activePath[activePath.length - 1].role === 'user') && (
-               <AssistantMessageGroup messages={[]} streamingContent={streamingContent} />
+               <AssistantMessageGroup messages={[]} streamingContent={streamingContent} messageIndex={activePath.length} />
             )}
             <div ref={messagesEndRef} />
           </div>

@@ -4,10 +4,72 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
-import { Copy, RotateCcw, Edit2, Check, ChevronDown, ChevronUp, Brain, GitBranch, FileText, Image as ImageIcon, Wrench, ExternalLink } from 'lucide-react';
+import { Copy, RotateCcw, Edit2, Check, ChevronDown, ChevronUp, Brain, GitBranch, FileText, Image as ImageIcon, Wrench, ExternalLink, Code2 } from 'lucide-react';
 import { useCanvasStore } from '@/stores/canvasStore';
+import { cn } from '@/utils';
 
-export const MarkdownRenderer = ({ content }: { content: string }) => {
+const ArtifactBlock = ({ 
+  artifact, 
+  isStreamingThis 
+}: { 
+  artifact: import('@/stores/canvasStore').Artifact, 
+  isStreamingThis: boolean 
+}) => {
+  const { activeArtifact, versions, registerArtifact, openArtifact } = useCanvasStore();
+  
+  useEffect(() => {
+    registerArtifact(artifact);
+  }, [artifact.content]);
+
+  useEffect(() => {
+    if (isStreamingThis) {
+      openArtifact(artifact);
+    }
+  }, [isStreamingThis, artifact.id]);
+
+  const versionNum = versions.filter(v => (v.identifier || v.type) === (artifact.identifier || artifact.type)).findIndex(v => v.id === artifact.id) + 1;
+  const displayVersion = versionNum > 0 ? versionNum : 1;
+  const isActive = activeArtifact?.id === artifact.id;
+
+  return (
+    <div 
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openArtifact(artifact);
+      }}
+      className={cn(
+        "my-4 p-4 rounded-xl border flex items-center justify-between cursor-pointer transition-all duration-200 group bg-white hover:bg-zinc-50 shadow-sm",
+        isActive ? "border-blue-500 ring-1 ring-blue-500/20" : "border-zinc-200"
+      )}
+    >
+      <div className="flex flex-col gap-1">
+        <div className="font-medium text-zinc-900 text-sm">
+          {artifact.title}
+        </div>
+        <div className="text-xs text-zinc-500 font-medium">
+          Code • Version {displayVersion}
+        </div>
+      </div>
+      <div className="w-10 h-10 bg-zinc-900 rounded-lg flex items-center justify-center shadow-inner group-hover:scale-105 transition-transform flex-shrink-0">
+        <Code2 className="w-5 h-5 text-zinc-300" />
+      </div>
+    </div>
+  );
+};
+
+export const MarkdownRenderer = ({ 
+  content,
+  messageId = 'unknown',
+  messageIndex = -1,
+  isStreaming = false
+}: { 
+  content: string;
+  messageId?: string;
+  messageIndex?: number;
+  isStreaming?: boolean;
+}) => {
+  let artifactIndex = 0;
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkMath]}
@@ -24,38 +86,31 @@ export const MarkdownRenderer = ({ content }: { content: string }) => {
           const isArtifact = isBlock && (isExplicitArtifact || isAppArtifact);
 
           if (isArtifact) {
+            artifactIndex++;
+            let filename = '';
+            const lines = contentStr.split('\n');
+            const firstLine = lines[0]?.trim() || '';
+            const filenameMatch = firstLine.match(/filename=["']?([^"'\s>]+)["']?/i) || firstLine.match(/([a-zA-Z0-9_\-.]+\.[a-zA-Z0-9]+)/i);
+            
+            if (firstLine.includes('filename') || firstLine.startsWith('<!--') || firstLine.startsWith('//') || firstLine.startsWith('/*')) {
+               if (filenameMatch && filenameMatch[1]) {
+                 filename = filenameMatch[1];
+               }
+            }
+            
+            const identifier = filename || language || 'code';
+            const title = filename || `${language.toUpperCase() || 'Code'} Artifact`;
+            const baseId = messageIndex >= 0 ? `idx-${messageIndex}` : messageId;
+
             const artifact = {
-              id: Math.random().toString(36).substring(7),
-              title: `${language.toUpperCase() || 'Code'} Artifact`,
+              id: `${baseId}-${language}-${artifactIndex}`,
+              title,
               type: language || 'code',
-              content: contentStr
+              content: contentStr,
+              identifier
             };
             
-            return (
-              <div className="my-4 p-5 border border-zinc-200 rounded-xl bg-zinc-50/50 shadow-sm flex flex-col sm:flex-row items-center sm:items-start gap-4">
-                <div className="p-3 bg-white rounded-lg border border-zinc-100 shadow-sm shrink-0">
-                  <FileText className="w-6 h-6 text-blue-500" />
-                </div>
-                <div className="flex-1 text-center sm:text-left">
-                  <div className="font-medium text-zinc-800 mb-1">{artifact.title}</div>
-                  <div className="text-xs text-zinc-500 mb-3 max-w-sm">
-                    Interactive content available. Open in canvas to view, execute, or download.
-                  </div>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      useCanvasStore.getState().openArtifact(artifact);
-                    }}
-                    className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-800 text-sm font-medium rounded-lg transition-colors shadow-sm"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                    Open Canvas
-                  </button>
-                </div>
-              </div>
-            );
+            return <ArtifactBlock artifact={artifact} isStreamingThis={isStreaming} />;
           }
 
           return isBlock ? (
@@ -105,7 +160,7 @@ export const MarkdownRenderer = ({ content }: { content: string }) => {
     </ReactMarkdown>
   );
 };
-import { cn, parseThinking } from '@/utils';
+import { parseThinking } from '@/utils';
 import type { Message } from '@/types';
 import { AttachmentThumbnail } from './AttachmentThumbnail';
 
