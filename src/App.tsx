@@ -8,6 +8,7 @@ import { ModelsPage } from '@/pages/ModelsPage';
 import { KnowledgeGraphPage } from '@/pages/KnowledgeGraphPage';
 import { ProjectsPage } from '@/pages/ProjectsPage';
 import { ProjectWorkspacePage } from '@/pages/ProjectWorkspacePage';
+import { PipelinesPage } from '@/pages/PipelinesPage';
 import { useSessionStore } from '@/stores/sessionStore';
 import { useMemoryStore } from '@/stores/memoryStore';
 import { useGraphStore } from '@/stores/graphStore';
@@ -50,6 +51,7 @@ function App() {
           <Route path="/memories" element={<MemoriesPage />} />
           <Route path="/models" element={<ModelsPage />} />
           <Route path="/knowledge-graph" element={<KnowledgeGraphPage />} />
+          <Route path="/pipelines" element={<PipelinesPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

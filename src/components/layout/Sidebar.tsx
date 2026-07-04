@@ -7,6 +7,7 @@ import {
   Brain,
   Network,
   Cpu,
+  Workflow,
   Settings,
   MoreHorizontal,
   Edit2,
@@ -330,6 +331,14 @@ export function Sidebar() {
           label="Models"
           to="/models"
           active={isActive("/models")}
+        />
+
+        {/* Pipelines */}
+        <NavItem
+          icon={<Workflow className="h-4 w-4" />}
+          label="Pipelines"
+          to="/pipelines"
+          active={isActive("/pipelines")}
         />
 
 
