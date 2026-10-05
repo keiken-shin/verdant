@@ -53,6 +53,29 @@ export function ProjectSettingsTab({ project }: ProjectSettingsTabProps) {
         </div>
       </div>
       
+      <div className="mb-10">
+        <h3 className="text-xs font-semibold tracking-wider text-zinc-500 uppercase mb-4">Memory & Isolation</h3>
+        
+        <div className="flex items-start justify-between py-3 border-b border-zinc-100 last:border-0">
+          <div className="flex-1 pr-8">
+            <label htmlFor="allow-global-memories" className="block text-sm font-medium text-zinc-800 mb-0.5">
+              Allow Global Memories
+            </label>
+            <p className="text-sm text-zinc-500 leading-relaxed max-w-md">
+              When disabled (default), this project remains strictly isolated and only accesses its own memories. Enable this if you want sessions in this project to also read global memories.
+            </p>
+          </div>
+          <div className="shrink-0 mt-1">
+            <input
+              id="allow-global-memories"
+              type="checkbox"
+              checked={project.allow_global_memories || false}
+              onChange={(e) => updateProject(project.id, { allow_global_memories: e.target.checked })}
+              className="h-4 w-4 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

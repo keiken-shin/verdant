@@ -113,13 +113,13 @@ pub fn export_session_markdown(session_id: String, db: State<Database>) -> Resul
 pub fn export_memories_json(db: State<Database>) -> Result<String, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn.prepare(
-        "SELECT id, content, category, source_session, created_at, updated_at FROM memories ORDER BY created_at DESC"
+        "SELECT id, content, category, source_session, project_id, created_at, updated_at FROM memories ORDER BY created_at DESC"
     ).map_err(|e| e.to_string())?;
 
     let memories: Vec<Memory> = stmt.query_map([], |row| {
         Ok(Memory {
             id: row.get(0)?, content: row.get(1)?, category: row.get(2)?,
-            source_session: row.get(3)?, created_at: row.get(4)?, updated_at: row.get(5)?,
+            source_session: row.get(3)?, project_id: row.get(4)?, created_at: row.get(5)?, updated_at: row.get(6)?,
         })
     }).map_err(|e| e.to_string())?
     .collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
@@ -132,28 +132,28 @@ pub fn export_graph_json(db: State<Database>) -> Result<String, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     let mut node_stmt = conn.prepare(
-        "SELECT id, label, category, color, x, y, metadata, created_at, updated_at FROM graph_nodes"
+        "SELECT id, label, category, color, x, y, metadata, project_id, domain, created_at, updated_at FROM graph_nodes"
     ).map_err(|e| e.to_string())?;
 
     let nodes: Vec<GraphNode> = node_stmt.query_map([], |row| {
         Ok(GraphNode {
             id: row.get(0)?, label: row.get(1)?, category: row.get(2)?,
             color: row.get(3)?, x: row.get(4)?, y: row.get(5)?,
-            metadata: row.get(6)?, created_at: row.get(7)?, updated_at: row.get(8)?,
-            project_id: None,
+            metadata: row.get(6)?, project_id: row.get(7)?, domain: row.get(8)?,
+            created_at: row.get(9)?, updated_at: row.get(10)?,
         })
     }).map_err(|e| e.to_string())?
     .collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
 
     let mut edge_stmt = conn.prepare(
-        "SELECT id, source_id, target_id, label, metadata, created_at FROM graph_edges"
+        "SELECT id, source_id, target_id, label, metadata, project_id, edge_type, created_at FROM graph_edges"
     ).map_err(|e| e.to_string())?;
 
     let edges: Vec<GraphEdge> = edge_stmt.query_map([], |row| {
         Ok(GraphEdge {
             id: row.get(0)?, source_id: row.get(1)?, target_id: row.get(2)?,
-            label: row.get(3)?, metadata: row.get(4)?, created_at: row.get(5)?,
-            project_id: None,
+            label: row.get(3)?, metadata: row.get(4)?, project_id: row.get(5)?,
+            edge_type: row.get(6)?, created_at: row.get(7)?,
         })
     }).map_err(|e| e.to_string())?
     .collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;

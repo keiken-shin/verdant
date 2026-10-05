@@ -18,6 +18,8 @@ import { useProviderStore } from '@/stores/providerStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { buildProjectContext } from '@/services/sessionContext';
+import { getOllamaEmbedding, searchProjectCodeVectors } from '@/services/embeddingService';
+import { shouldRetrieveCodeContext } from '@/services/systemOneService';
 import { useModels } from '@/hooks/useModels';
 import type { Message, ChatMessage } from '@/types';
 import { cn } from '@/utils';
@@ -286,6 +288,40 @@ export function ChatPage() {
         try {
           await fetchProjectFiles(sessionProjectId);
           const files = useProjectStore.getState().filesByProject[sessionProjectId] || [];
+
+          // Vector RAG for linked codebase folder
+          let relevantCodeChunks: { file_path: string; chunk_text: string; start_line: number; end_line: number }[] = [];
+          if (proj.folder_path) {
+            try {
+              let shouldRetrieve = true;
+              if (settings.enable_system_one) {
+                shouldRetrieve = await shouldRetrieveCodeContext(
+                  ollamaEndpoint,
+                  settings.system_one_model || 'clef-flash',
+                  content
+                );
+              }
+              if (shouldRetrieve) {
+                const queryEmb = await getOllamaEmbedding(
+                  ollamaEndpoint,
+                  'nomic-embed-text',
+                  content
+                );
+                if (queryEmb && queryEmb.length > 0) {
+                  const hits = await searchProjectCodeVectors(sessionProjectId, queryEmb, 4);
+                  relevantCodeChunks = hits.map((h) => ({
+                    file_path: h.file_path,
+                    chunk_text: h.chunk_text,
+                    start_line: h.start_line,
+                    end_line: h.end_line,
+                  }));
+                }
+              }
+            } catch (err) {
+              console.warn('[RAG] Failed to search codebase chunks:', err);
+            }
+          }
+
           const systemMsg = await buildProjectContext({
             project: proj,
             files,
@@ -293,6 +329,8 @@ export function ChatPage() {
             provider,
             modelId: settings.extraction_model || activeModelId || 'llama3',
             budgetTokens: Math.floor((settings.ollama_num_ctx || 32768) * 0.8), // Leave 20% for history and response
+            relevantCodeChunks,
+            userMessage: content,
           });
           if (systemMsg) history.unshift({ role: 'system', content: systemMsg });
         } catch (e) {
@@ -326,9 +364,16 @@ export function ChatPage() {
 
     const state = useSessionStore.getState();
     const selectedTools = state.activeToolsBySession[sid] || [];
-    const activeTools = selectedTools.length > 0 
-      ? availableTools.filter(t => selectedTools.includes(t.function.name))
-      : undefined;
+    const activeProject = sessionProjectId ? useProjectStore.getState().projects.find((p) => p.id === sessionProjectId) : undefined;
+    const isLinkedProject = Boolean(activeProject?.folder_path);
+
+    const activeToolsList = availableTools.filter(t => {
+      if (selectedTools.includes(t.function.name)) return true;
+      if (selectedTools.includes('workspace_tools') && (t.function.name === 'read_workspace_file' || t.function.name === 'search_workspace_code' || t.function.name === 'list_workspace_files')) return true;
+      if (isLinkedProject && (t.function.name === 'read_workspace_file' || t.function.name === 'search_workspace_code' || t.function.name === 'list_workspace_files')) return true;
+      return false;
+    });
+    const activeTools = activeToolsList.length > 0 ? activeToolsList : undefined;
 
     if (selectedTools.includes('canvas')) {
       history.unshift({ role: 'system', content: 'You have access to an interactive Canvas panel. When asked to create an application, component, or document, you MUST provide the ENTIRE, completely self-contained code in a SINGLE markdown fenced code block (e.g. ```html or ```react). DO NOT break the code into multiple step-by-step snippets or provide partial updates. Output the final, working code all at once so it can be rendered as a single interactive Canvas. IMPORTANT: To help the system track files, you MUST start the code block with a filename comment on the very first line (e.g. <!-- filename="app.html" --> or // filename="utils.js").' });
@@ -368,6 +413,7 @@ export function ChatPage() {
 
         const calls = receivedToolCalls as import('@/types').ToolCall[] | undefined;
         if (calls && calls.length > 0) {
+          setStreamingParentId(nextParentId);
           currentHistory.push({
             role: 'assistant',
             content: finalContent,
@@ -376,9 +422,10 @@ export function ChatPage() {
 
           for (const tc of calls) {
             setStreamingContent(`Executing tool: ${tc.function.name}...`);
-            const res = await executeToolCall(tc);
+            const res = await executeToolCall(tc, activeProject?.folder_path);
             const toolMsg = await addMessage(sid, 'tool', res, activeModelId || undefined, nextParentId, undefined, undefined, tc.id);
             nextParentId = toolMsg.id;
+            setStreamingParentId(nextParentId);
             
             currentHistory.push({
               role: 'tool',
@@ -470,9 +517,49 @@ export function ChatPage() {
           const proj = useProjectStore.getState().projects.find(p => p.id === currentSession.project_id);
           if (proj) {
             const files = useProjectStore.getState().filesByProject[proj.id] || [];
+
+            // Vector RAG for linked codebase folder
+            let relevantCodeChunks: { file_path: string; chunk_text: string; start_line: number; end_line: number }[] = [];
+            if (proj.folder_path && parentMsg.content) {
+              try {
+                let shouldRetrieve = true;
+                if (settings.enable_system_one) {
+                  shouldRetrieve = await shouldRetrieveCodeContext(
+                    ollamaEndpoint,
+                    settings.system_one_model || 'clef-flash',
+                    parentMsg.content
+                  );
+                }
+                if (shouldRetrieve) {
+                  const queryEmb = await getOllamaEmbedding(
+                    ollamaEndpoint,
+                    'nomic-embed-text',
+                    parentMsg.content
+                  );
+                  if (queryEmb && queryEmb.length > 0) {
+                    const hits = await searchProjectCodeVectors(proj.id, queryEmb, 4);
+                    relevantCodeChunks = hits.map((h) => ({
+                      file_path: h.file_path,
+                      chunk_text: h.chunk_text,
+                      start_line: h.start_line,
+                      end_line: h.end_line,
+                    }));
+                  }
+                }
+              } catch (err) {
+                console.warn('[RAG] Failed to search codebase chunks on regenerate:', err);
+              }
+            }
+
             const systemMsg = await buildProjectContext({
-              project: proj, files, currentSessionId: sessionId, provider, modelId: settings.extraction_model || activeModelId || 'llama3',
+              project: proj,
+              files,
+              currentSessionId: sessionId,
+              provider,
+              modelId: settings.extraction_model || activeModelId || 'llama3',
               budgetTokens: Math.floor((settings.ollama_num_ctx || 32768) * 0.8),
+              relevantCodeChunks,
+              userMessage: parentMsg.content,
             });
             if (systemMsg) history.unshift({ role: 'system', content: systemMsg });
           }
@@ -480,23 +567,42 @@ export function ChatPage() {
         
         const state = useSessionStore.getState();
         const selectedTools = state.activeToolsBySession[sessionId] || [];
-        const activeTools = selectedTools.length > 0 
-          ? availableTools.filter(t => selectedTools.includes(t.function.name))
-          : undefined;
+        const isRegenLinkedProject = Boolean(currentSession?.project_id && useProjectStore.getState().projects.find(p => p.id === currentSession.project_id)?.folder_path);
+
+        const activeToolsList = availableTools.filter(t => {
+          if (selectedTools.includes(t.function.name)) return true;
+          if (selectedTools.includes('workspace_tools') && (t.function.name === 'read_workspace_file' || t.function.name === 'search_workspace_code' || t.function.name === 'list_workspace_files')) return true;
+          if (isRegenLinkedProject && (t.function.name === 'read_workspace_file' || t.function.name === 'search_workspace_code' || t.function.name === 'list_workspace_files')) return true;
+          return false;
+        });
+        const activeTools = activeToolsList.length > 0 ? activeToolsList : undefined;
 
         if (selectedTools.includes('canvas')) {
           history.unshift({ role: 'system', content: 'You have access to an interactive Canvas panel. When asked to create an application, component, or document, you MUST provide the ENTIRE, completely self-contained code in a SINGLE markdown fenced code block (e.g. ```html or ```react). DO NOT break the code into multiple step-by-step snippets or provide partial updates. Output the final, working code all at once so it can be rendered as a single interactive Canvas. IMPORTANT: To help the system track files, you MUST start the code block with a filename comment on the very first line (e.g. <!-- filename="app.html" --> or // filename="utils.js").' });
         }
 
+        let regenReceivedToolCalls: import('@/types').ToolCall[] | undefined = undefined;
+
         await provider.streamChat(
           { model: activeModelId || 'llama3', messages: history, stream: true, tools: activeTools },
-          (chunk) => { if (chunk.content) appendStreamingContent(chunk.content); },
+          (chunk) => {
+            if (chunk.content) appendStreamingContent(chunk.content);
+            if (chunk.tool_calls) regenReceivedToolCalls = chunk.tool_calls;
+          },
           abortCtrl.signal
         );
 
         const finalContent = useMessageStore.getState().streamingContent;
-        if (finalContent) {
-          await addMessage(sessionId, 'assistant', finalContent, activeModelId || undefined, parentMsg.id);
+        if (finalContent || regenReceivedToolCalls) {
+          const addedAssistant = await addMessage(sessionId, 'assistant', finalContent, activeModelId || undefined, parentMsg.id, undefined, regenReceivedToolCalls ? JSON.stringify(regenReceivedToolCalls) : undefined);
+          
+          if (regenReceivedToolCalls && (regenReceivedToolCalls as import('@/types').ToolCall[]).length > 0) {
+            const regenProject = currentSession?.project_id ? useProjectStore.getState().projects.find(p => p.id === currentSession.project_id) : undefined;
+            for (const tc of regenReceivedToolCalls as import('@/types').ToolCall[]) {
+              const res = await executeToolCall(tc, regenProject?.folder_path);
+              await addMessage(sessionId, 'tool', res, activeModelId || undefined, addedAssistant.id, undefined, undefined, tc.id);
+            }
+          }
         }
       } catch (e: unknown) {
         if (e instanceof Error && e.name !== 'AbortError') {
@@ -701,7 +807,8 @@ export function ChatPage() {
               const filteredPath = activePath.filter(msg => {
                 if (isStreaming && streamingSessionId === sessionId && streamingParentId) {
                   const parentId = msg.parent_id || (messages.indexOf(msg) > 0 ? messages[messages.indexOf(msg) - 1].id : null);
-                  if (parentId === streamingParentId && (msg.role === 'assistant' || msg.role === 'tool')) {
+                  // Only filter out assistant messages being regenerated, never completed turns or tool calls
+                  if (parentId === streamingParentId && msg.role === 'assistant' && !msg.tool_calls) {
                     return false;
                   }
                 }

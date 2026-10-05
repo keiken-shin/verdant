@@ -11,6 +11,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   theme: 'paper-light',
   extraction_model: '',
   default_persona_id: 'default-assistant',
+  enable_system_one: false,
+  system_one_model: '',
 };
 
 interface SettingsStore {

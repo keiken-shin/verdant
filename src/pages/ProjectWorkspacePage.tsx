@@ -54,7 +54,7 @@ export function ProjectWorkspacePage() {
         {tab === 'Chat' && (
           <ProjectChatTab projectId={project.id} projectSessions={projectSessions} />
         )}
-        {tab === 'Files' && (
+        {tab === 'Workspace' && (
           <ProjectFilesTab project={project} files={files} />
         )}
         {tab === 'Graph' && (

@@ -5,6 +5,7 @@ import type { Project, ProjectFile } from '@/types';
 interface ProjectStore {
   projects: Project[];
   filesByProject: Record<string, ProjectFile[]>;
+  cachedFolderTrees: Record<string, any>;
   loading: boolean;
 
   fetchProjects: () => Promise<void>;
@@ -13,6 +14,8 @@ interface ProjectStore {
   deleteProject: (id: string) => Promise<void>;
   touchProject: (id: string) => Promise<void>;
   searchProjects: (query: string) => Promise<Project[]>;
+  setCachedFolderTree: (projectId: string, tree: any) => void;
+  invalidateFolderTree: (projectId: string) => void;
 
   fetchProjectFiles: (projectId: string) => Promise<void>;
   addProjectFile: (projectId: string, name: string, ext: string, size: number, objectId: string) => Promise<ProjectFile>;
@@ -24,6 +27,7 @@ interface ProjectStore {
 export const useProjectStore = create<ProjectStore>((set, get) => ({
   projects: [],
   filesByProject: {},
+  cachedFolderTrees: {},
   loading: false,
 
   fetchProjects: async () => {
@@ -47,9 +51,30 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
 
   updateProject: async (id, data) => {
     await invoke('update_project', { id, input: data });
+    set((state) => {
+      const nextTrees = { ...state.cachedFolderTrees };
+      if (data.folder_path !== undefined) {
+        delete nextTrees[id];
+      }
+      return {
+        projects: state.projects.map((p) => (p.id === id ? { ...p, ...data } : p)),
+        cachedFolderTrees: nextTrees,
+      };
+    });
+  },
+
+  setCachedFolderTree: (projectId, tree) => {
     set((state) => ({
-      projects: state.projects.map((p) => (p.id === id ? { ...p, ...data } : p)),
+      cachedFolderTrees: { ...state.cachedFolderTrees, [projectId]: tree },
     }));
+  },
+
+  invalidateFolderTree: (projectId) => {
+    set((state) => {
+      const nextTrees = { ...state.cachedFolderTrees };
+      delete nextTrees[projectId];
+      return { cachedFolderTrees: nextTrees };
+    });
   },
 
   deleteProject: async (id) => {

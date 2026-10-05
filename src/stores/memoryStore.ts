@@ -6,8 +6,8 @@ interface MemoryStore {
   memories: Memory[];
   loading: boolean;
 
-  fetchMemories: () => Promise<void>;
-  createMemory: (content: string, category?: MemoryCategory, sourceSession?: string) => Promise<Memory>;
+  fetchMemories: (projectId?: string) => Promise<void>;
+  createMemory: (content: string, category?: MemoryCategory, sourceSession?: string, projectId?: string) => Promise<Memory>;
   updateMemory: (id: string, content: string, category?: MemoryCategory) => Promise<void>;
   deleteMemory: (id: string) => Promise<void>;
   searchMemories: (query: string) => Promise<Memory[]>;
@@ -17,10 +17,10 @@ export const useMemoryStore = create<MemoryStore>((set, get) => ({
   memories: [],
   loading: false,
 
-  fetchMemories: async () => {
+  fetchMemories: async (projectId) => {
     set({ loading: true });
     try {
-      const memories = await invoke<Memory[]>('get_memories');
+      const memories = await invoke<Memory[]>('get_memories', { projectId: projectId || null });
       set({ memories, loading: false });
     } catch (e) {
       console.error('Failed to fetch memories:', e);
@@ -28,9 +28,9 @@ export const useMemoryStore = create<MemoryStore>((set, get) => ({
     }
   },
 
-  createMemory: async (content, category = 'CONTEXT', sourceSession) => {
+  createMemory: async (content, category = 'CONTEXT', sourceSession, projectId) => {
     const memory = await invoke<Memory>('create_memory', {
-      input: { content, category, source_session: sourceSession },
+      input: { content, category, source_session: sourceSession, project_id: projectId || null },
     });
     set((state) => ({ memories: [memory, ...state.memories] }));
     return memory;

@@ -9,8 +9,8 @@ interface GraphStore {
   loading: boolean;
 
   fetchGraph: (projectId?: string) => Promise<void>;
-  addNode: (label: string, category: NodeCategory, x?: number, y?: number, projectId?: string, metadata?: string) => Promise<GraphNode>;
-  addEdge: (sourceId: string, targetId: string, label?: string, projectId?: string) => Promise<GraphEdge>;
+  addNode: (label: string, category: NodeCategory, x?: number, y?: number, projectId?: string, metadata?: string, domain?: 'code' | 'conversation') => Promise<GraphNode>;
+  addEdge: (sourceId: string, targetId: string, label?: string, projectId?: string, edgeType?: 'structural' | 'conceptual' | 'bridge') => Promise<GraphEdge>;
   updateNodePositions: (positions: { id: string; x: number; y: number }[]) => Promise<void>;
   updateNodeMetadata: (id: string, metadata: string) => Promise<void>;
   deleteNode: (id: string) => Promise<void>;
@@ -34,18 +34,18 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
     }
   },
 
-  addNode: async (label, category, x = 0, y = 0, projectId?: string, metadata?: string) => {
+  addNode: async (label, category, x = 0, y = 0, projectId?: string, metadata?: string, domain?: 'code' | 'conversation') => {
     const color = NODE_CATEGORY_COLORS[category];
     const node = await invoke<GraphNode>('create_graph_node', {
-      input: { label, category, color, x, y, project_id: projectId, metadata },
+      input: { label, category, color, x, y, project_id: projectId, metadata, domain: domain || 'conversation' },
     });
     set((state) => ({ nodes: [...state.nodes, node] }));
     return node;
   },
 
-  addEdge: async (sourceId, targetId, label?, projectId?) => {
+  addEdge: async (sourceId, targetId, label?, projectId?, edgeType?) => {
     const edge = await invoke<GraphEdge>('create_graph_edge', {
-      input: { source_id: sourceId, target_id: targetId, label, project_id: projectId },
+      input: { source_id: sourceId, target_id: targetId, label, project_id: projectId, edge_type: edgeType || 'conceptual' },
     });
     set((state) => ({ edges: [...state.edges, edge] }));
     return edge;

@@ -11,6 +11,8 @@ pub struct Project {
     pub instructions: Option<String>,
     pub color: Option<String>,
     pub persona_id: Option<String>,
+    pub folder_path: Option<String>,
+    pub allow_global_memories: bool,
     pub is_pinned: bool,
     pub last_opened_at: Option<String>,
     pub created_at: String,
@@ -24,6 +26,8 @@ pub struct CreateProjectInput {
     pub instructions: Option<String>,
     pub color: Option<String>,
     pub persona_id: Option<String>,
+    pub folder_path: Option<String>,
+    pub allow_global_memories: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -33,10 +37,12 @@ pub struct UpdateProjectInput {
     pub instructions: Option<String>,
     pub color: Option<String>,
     pub persona_id: Option<String>,
+    pub folder_path: Option<String>,
+    pub allow_global_memories: Option<bool>,
     pub is_pinned: Option<bool>,
 }
 
-const PROJECT_COLS: &str = "id, name, description, instructions, color, persona_id, is_pinned, last_opened_at, created_at, updated_at";
+const PROJECT_COLS: &str = "id, name, description, instructions, color, persona_id, folder_path, allow_global_memories, is_pinned, last_opened_at, created_at, updated_at";
 
 fn map_project(row: &rusqlite::Row) -> rusqlite::Result<Project> {
     Ok(Project {
@@ -46,10 +52,12 @@ fn map_project(row: &rusqlite::Row) -> rusqlite::Result<Project> {
         instructions: row.get(3)?,
         color: row.get(4)?,
         persona_id: row.get(5)?,
-        is_pinned: row.get::<_, i32>(6)? != 0,
-        last_opened_at: row.get(7)?,
-        created_at: row.get(8)?,
-        updated_at: row.get(9)?,
+        folder_path: row.get(6)?,
+        allow_global_memories: row.get::<_, i32>(7)? != 0,
+        is_pinned: row.get::<_, i32>(8)? != 0,
+        last_opened_at: row.get(9)?,
+        created_at: row.get(10)?,
+        updated_at: row.get(11)?,
     })
 }
 
@@ -83,10 +91,12 @@ pub fn create_project(input: CreateProjectInput, db: State<Database>) -> Result<
     let now = chrono::Utc::now().to_rfc3339();
     let name = input.name.unwrap_or_else(|| "Untitled Project".to_string());
 
+    let allow_global = input.allow_global_memories.unwrap_or(false) as i32;
+
     conn.execute(
-        "INSERT INTO projects (id, name, description, instructions, color, persona_id, is_pinned, last_opened_at, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, ?7, ?8, ?9)",
-        params![id, name, input.description, input.instructions, input.color, input.persona_id, now, now, now],
+        "INSERT INTO projects (id, name, description, instructions, color, persona_id, folder_path, allow_global_memories, is_pinned, last_opened_at, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, ?9, ?10, ?11)",
+        params![id, name, input.description, input.instructions, input.color, input.persona_id, input.folder_path, allow_global, now, now, now],
     ).map_err(|e| e.to_string())?;
 
     Ok(Project {
@@ -96,6 +106,8 @@ pub fn create_project(input: CreateProjectInput, db: State<Database>) -> Result<
         instructions: input.instructions,
         color: input.color,
         persona_id: input.persona_id,
+        folder_path: input.folder_path,
+        allow_global_memories: input.allow_global_memories.unwrap_or(false),
         is_pinned: false,
         last_opened_at: Some(now.clone()),
         created_at: now.clone(),
@@ -129,6 +141,15 @@ pub fn update_project(id: String, input: UpdateProjectInput, db: State<Database>
         let val = if persona_id.is_empty() { None } else { Some(persona_id) };
         conn.execute("UPDATE projects SET persona_id = ?1, updated_at = ?2 WHERE id = ?3",
             params![val, now, id]).map_err(|e| e.to_string())?;
+    }
+    if let Some(folder_path) = input.folder_path {
+        let val = if folder_path.is_empty() { None } else { Some(folder_path) };
+        conn.execute("UPDATE projects SET folder_path = ?1, updated_at = ?2 WHERE id = ?3",
+            params![val, now, id]).map_err(|e| e.to_string())?;
+    }
+    if let Some(allow_global) = input.allow_global_memories {
+        conn.execute("UPDATE projects SET allow_global_memories = ?1, updated_at = ?2 WHERE id = ?3",
+            params![allow_global as i32, now, id]).map_err(|e| e.to_string())?;
     }
     if let Some(is_pinned) = input.is_pinned {
         conn.execute("UPDATE projects SET is_pinned = ?1, updated_at = ?2 WHERE id = ?3",

@@ -9,6 +9,7 @@ pub struct Memory {
     pub content: String,
     pub category: String,
     pub source_session: Option<String>,
+    pub project_id: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -18,28 +19,83 @@ pub struct CreateMemoryInput {
     pub content: String,
     pub category: Option<String>,
     pub source_session: Option<String>,
+    pub project_id: Option<String>,
 }
 
 #[tauri::command]
-pub fn get_memories(db: State<Database>) -> Result<Vec<Memory>, String> {
+pub fn get_memories(project_id: Option<String>, db: State<Database>) -> Result<Vec<Memory>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    let mut stmt = conn.prepare(
-        "SELECT id, content, category, source_session, created_at, updated_at
-         FROM memories ORDER BY created_at DESC"
-    ).map_err(|e| e.to_string())?;
 
-    let memories = stmt.query_map([], |row| {
-        Ok(Memory {
-            id: row.get(0)?,
-            content: row.get(1)?,
-            category: row.get(2)?,
-            source_session: row.get(3)?,
-            created_at: row.get(4)?,
-            updated_at: row.get(5)?,
-        })
-    }).map_err(|e| e.to_string())?;
+    let memories = match project_id {
+        Some(pid) => {
+            // Check if this project allows global memories
+            let allow_global: bool = conn.query_row(
+                "SELECT allow_global_memories FROM projects WHERE id = ?1",
+                params![pid],
+                |row| row.get::<_, i32>(0),
+            ).map(|val| val != 0).unwrap_or(false);
 
-    memories.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+            if allow_global {
+                let mut stmt = conn.prepare(
+                    "SELECT id, content, category, source_session, project_id, created_at, updated_at
+                     FROM memories WHERE project_id = ?1 OR project_id IS NULL ORDER BY created_at DESC"
+                ).map_err(|e| e.to_string())?;
+                let list = stmt.query_map(params![pid], |row| {
+                    Ok(Memory {
+                        id: row.get(0)?,
+                        content: row.get(1)?,
+                        category: row.get(2)?,
+                        source_session: row.get(3)?,
+                        project_id: row.get(4)?,
+                        created_at: row.get(5)?,
+                        updated_at: row.get(6)?,
+                    })
+                }).map_err(|e| e.to_string())?
+                .collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
+                list
+            } else {
+                let mut stmt = conn.prepare(
+                    "SELECT id, content, category, source_session, project_id, created_at, updated_at
+                     FROM memories WHERE project_id = ?1 ORDER BY created_at DESC"
+                ).map_err(|e| e.to_string())?;
+                let list = stmt.query_map(params![pid], |row| {
+                    Ok(Memory {
+                        id: row.get(0)?,
+                        content: row.get(1)?,
+                        category: row.get(2)?,
+                        source_session: row.get(3)?,
+                        project_id: row.get(4)?,
+                        created_at: row.get(5)?,
+                        updated_at: row.get(6)?,
+                    })
+                }).map_err(|e| e.to_string())?
+                .collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
+                list
+            }
+        },
+        None => {
+            // Global memories only
+            let mut stmt = conn.prepare(
+                "SELECT id, content, category, source_session, project_id, created_at, updated_at
+                 FROM memories WHERE project_id IS NULL ORDER BY created_at DESC"
+            ).map_err(|e| e.to_string())?;
+            let list = stmt.query_map([], |row| {
+                Ok(Memory {
+                    id: row.get(0)?,
+                    content: row.get(1)?,
+                    category: row.get(2)?,
+                    source_session: row.get(3)?,
+                    project_id: row.get(4)?,
+                    created_at: row.get(5)?,
+                    updated_at: row.get(6)?,
+                })
+            }).map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
+            list
+        }
+    };
+
+    Ok(memories)
 }
 
 #[tauri::command]
@@ -50,9 +106,9 @@ pub fn create_memory(input: CreateMemoryInput, db: State<Database>) -> Result<Me
     let category = input.category.unwrap_or_else(|| "CONTEXT".to_string());
 
     conn.execute(
-        "INSERT INTO memories (id, content, category, source_session, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![id, input.content, category, input.source_session, now, now],
+        "INSERT INTO memories (id, content, category, source_session, project_id, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![id, input.content, category, input.source_session, input.project_id, now, now],
     ).map_err(|e| e.to_string())?;
 
     Ok(Memory {
@@ -60,6 +116,7 @@ pub fn create_memory(input: CreateMemoryInput, db: State<Database>) -> Result<Me
         content: input.content,
         category,
         source_session: input.source_session,
+        project_id: input.project_id,
         created_at: now.clone(),
         updated_at: now,
     })
@@ -97,7 +154,7 @@ pub fn search_memories(query: String, db: State<Database>) -> Result<Vec<Memory>
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let pattern = format!("%{}%", query);
     let mut stmt = conn.prepare(
-        "SELECT id, content, category, source_session, created_at, updated_at
+        "SELECT id, content, category, source_session, project_id, created_at, updated_at
          FROM memories WHERE content LIKE ?1 ORDER BY created_at DESC LIMIT 20"
     ).map_err(|e| e.to_string())?;
 
@@ -107,8 +164,9 @@ pub fn search_memories(query: String, db: State<Database>) -> Result<Vec<Memory>
             content: row.get(1)?,
             category: row.get(2)?,
             source_session: row.get(3)?,
-            created_at: row.get(4)?,
-            updated_at: row.get(5)?,
+            project_id: row.get(4)?,
+            created_at: row.get(5)?,
+            updated_at: row.get(6)?,
         })
     }).map_err(|e| e.to_string())?;
 

@@ -112,6 +112,22 @@ impl Database {
             )?;
         }
 
+        if version < 10 {
+            conn.execute_batch(include_str!("../migrations/010_project_folder_and_memory.sql"))?;
+            conn.execute(
+                "INSERT INTO schema_version (version, applied_at) VALUES (10, datetime('now'))",
+                [],
+            )?;
+        }
+
+        if version < 11 {
+            conn.execute_batch(include_str!("../migrations/011_code_chunks.sql"))?;
+            conn.execute(
+                "INSERT INTO schema_version (version, applied_at) VALUES (11, datetime('now'))",
+                [],
+            )?;
+        }
+
         Ok(())
     }
 }

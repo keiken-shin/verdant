@@ -6,7 +6,7 @@ import { cn } from '@/utils';
 import { useConfirmStore } from '@/stores/confirmStore';
 import type { Project } from '@/types';
 
-export const TABS = ['Chat', 'Files', 'Graph', 'Timeline', 'Settings'] as const;
+export const TABS = ['Chat', 'Workspace', 'Graph', 'Timeline', 'Settings'] as const;
 export type Tab = typeof TABS[number];
 
 interface ProjectWorkspaceHeaderProps {
@@ -119,7 +119,7 @@ export function ProjectWorkspaceHeader({ project, tab, setTab, filesCount }: Pro
       {/* Tabs */}
       <div className="flex items-center gap-1 mt-5 -mb-3">
         {TABS.map((t) => {
-          const Icon = { Chat: MessageSquare, Files: FileText, Graph: Network, Timeline: Clock, Settings: Settings }[t];
+          const Icon = { Chat: MessageSquare, Workspace: FileText, Graph: Network, Timeline: Clock, Settings: Settings }[t];
           return (
             <button
               key={t}
@@ -133,7 +133,7 @@ export function ProjectWorkspaceHeader({ project, tab, setTab, filesCount }: Pro
             >
               <Icon className="h-3.5 w-3.5" />
               {t}
-              {t === 'Files' && filesCount > 0 && <span className="text-xs text-zinc-400">({filesCount})</span>}
+              {t === 'Workspace' && (project.folder_path ? <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title="Linked" /> : null)}
             </button>
           );
         })}

@@ -417,6 +417,40 @@ export function SettingsModal() {
                   </optgroup>
                 ))}
               </SelectSetting>
+
+              <div className="pt-4 border-t border-zinc-100">
+                <ToggleSetting
+                  id="setting-system-one"
+                  title="Enable System-1 Decision Layer (Clef)"
+                  description="Off by default. Uses ultra-fast decision models (like Clef-Flash or Clef 27B via Ollama /v1/systemone) for sub-40ms decision gating, query routing, and bridge extraction."
+                  checked={settings.enable_system_one || false}
+                  onChange={(v) => updateSetting('enable_system_one', v)}
+                />
+
+                {settings.enable_system_one && (
+                  <div className="mt-3">
+                    <SelectSetting
+                      id="setting-system-one-model"
+                      title="Decision Model"
+                      description="Select the decision model (e.g., clef-flash, clef). Requires Ollama v0.35.1+."
+                      value={settings.system_one_model || 'clef-flash'}
+                      onChange={(v) => updateSetting('system_one_model', v)}
+                    >
+                      <option value="clef-flash">clef-flash (Recommended)</option>
+                      <option value="clef">clef (27B)</option>
+                      {Object.entries(groupedModels).map(([providerName, providerModels]) => (
+                        <optgroup key={providerName} label={providerName}>
+                          {providerModels.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </SelectSetting>
+                  </div>
+                )}
+              </div>
             </SettingSection>
           </div>
         );

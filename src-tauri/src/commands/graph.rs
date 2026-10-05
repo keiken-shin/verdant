@@ -13,6 +13,7 @@ pub struct GraphNode {
     pub y: f64,
     pub metadata: String,
     pub project_id: Option<String>,
+    pub domain: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -25,6 +26,7 @@ pub struct GraphEdge {
     pub label: Option<String>,
     pub metadata: String,
     pub project_id: Option<String>,
+    pub edge_type: Option<String>,
     pub created_at: String,
 }
 
@@ -36,6 +38,7 @@ pub struct CreateNodeInput {
     pub x: Option<f64>,
     pub y: Option<f64>,
     pub project_id: Option<String>,
+    pub domain: Option<String>,
     /// Optional JSON metadata blob (e.g. source_session_id, relevance, conversation_type)
     pub metadata: Option<String>,
 }
@@ -46,6 +49,7 @@ pub struct CreateEdgeInput {
     pub target_id: String,
     pub label: Option<String>,
     pub project_id: Option<String>,
+    pub edge_type: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -74,18 +78,24 @@ fn category_to_color(category: &str) -> String {
     }
 }
 
-// project_id = None returns the entire graph (global /knowledge-graph page).
-// Some(id) scopes to one project's nodes/edges.
+// project_id = None returns only global graph nodes/edges (WHERE project_id IS NULL).
+// Some(id) scopes strictly to that project's nodes/edges.
 #[tauri::command]
 pub fn get_graph_data(project_id: Option<String>, db: State<Database>) -> Result<GraphData, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
-    let mut node_stmt = conn.prepare(
-        "SELECT id, label, category, color, x, y, metadata, project_id, created_at, updated_at FROM graph_nodes
-         WHERE (?1 IS NULL OR project_id = ?1)"
-    ).map_err(|e| e.to_string())?;
+    let (node_sql, edge_sql) = match &project_id {
+        Some(_) => (
+            "SELECT id, label, category, color, x, y, metadata, project_id, domain, created_at, updated_at FROM graph_nodes WHERE project_id = ?1",
+            "SELECT id, source_id, target_id, label, metadata, project_id, edge_type, created_at FROM graph_edges WHERE project_id = ?1",
+        ),
+        None => (
+            "SELECT id, label, category, color, x, y, metadata, project_id, domain, created_at, updated_at FROM graph_nodes WHERE project_id IS NULL",
+            "SELECT id, source_id, target_id, label, metadata, project_id, edge_type, created_at FROM graph_edges WHERE project_id IS NULL",
+        ),
+    };
 
-    let nodes: Vec<GraphNode> = node_stmt.query_map(params![project_id], |row| {
+    let map_node = |row: &rusqlite::Row| {
         let category: String = row.get(2)?;
         let color: Option<String> = row.get(3)?;
         Ok(GraphNode {
@@ -97,18 +107,13 @@ pub fn get_graph_data(project_id: Option<String>, db: State<Database>) -> Result
             y: row.get(5)?,
             metadata: row.get(6)?,
             project_id: row.get(7)?,
-            created_at: row.get(8)?,
-            updated_at: row.get(9)?,
+            domain: row.get(8)?,
+            created_at: row.get(9)?,
+            updated_at: row.get(10)?,
         })
-    }).map_err(|e| e.to_string())?
-    .collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
+    };
 
-    let mut edge_stmt = conn.prepare(
-        "SELECT id, source_id, target_id, label, metadata, project_id, created_at FROM graph_edges
-         WHERE (?1 IS NULL OR project_id = ?1)"
-    ).map_err(|e| e.to_string())?;
-
-    let edges: Vec<GraphEdge> = edge_stmt.query_map(params![project_id], |row| {
+    let map_edge = |row: &rusqlite::Row| {
         Ok(GraphEdge {
             id: row.get(0)?,
             source_id: row.get(1)?,
@@ -116,10 +121,39 @@ pub fn get_graph_data(project_id: Option<String>, db: State<Database>) -> Result
             label: row.get(3)?,
             metadata: row.get(4)?,
             project_id: row.get(5)?,
-            created_at: row.get(6)?,
+            edge_type: row.get(6)?,
+            created_at: row.get(7)?,
         })
-    }).map_err(|e| e.to_string())?
-    .collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
+    };
+
+    let (nodes, edges) = match &project_id {
+        Some(pid) => {
+            let mut node_stmt = conn.prepare(node_sql).map_err(|e| e.to_string())?;
+            let nodes = node_stmt.query_map(params![pid], map_node)
+                .map_err(|e| e.to_string())?
+                .collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
+
+            let mut edge_stmt = conn.prepare(edge_sql).map_err(|e| e.to_string())?;
+            let edges = edge_stmt.query_map(params![pid], map_edge)
+                .map_err(|e| e.to_string())?
+                .collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
+
+            (nodes, edges)
+        }
+        None => {
+            let mut node_stmt = conn.prepare(node_sql).map_err(|e| e.to_string())?;
+            let nodes = node_stmt.query_map(params![], map_node)
+                .map_err(|e| e.to_string())?
+                .collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
+
+            let mut edge_stmt = conn.prepare(edge_sql).map_err(|e| e.to_string())?;
+            let edges = edge_stmt.query_map(params![], map_edge)
+                .map_err(|e| e.to_string())?
+                .collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
+
+            (nodes, edges)
+        }
+    };
 
     Ok(GraphData { nodes, edges })
 }
@@ -132,13 +166,13 @@ pub fn create_graph_node(input: CreateNodeInput, db: State<Database>) -> Result<
     let color = input.color.unwrap_or_else(|| category_to_color(&input.category));
     let x = input.x.unwrap_or(0.0);
     let y = input.y.unwrap_or(0.0);
-    // Use caller-supplied metadata or default to empty JSON object
+    let domain = input.domain.unwrap_or_else(|| "conversation".to_string());
     let metadata = input.metadata.unwrap_or_else(|| "{}".to_string());
 
     conn.execute(
-        "INSERT INTO graph_nodes (id, label, category, color, x, y, metadata, project_id, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-        params![id, input.label, input.category, color, x, y, metadata, input.project_id, now, now],
+        "INSERT INTO graph_nodes (id, label, category, color, x, y, metadata, project_id, domain, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        params![id, input.label, input.category, color, x, y, metadata, input.project_id, domain, now, now],
     ).map_err(|e| e.to_string())?;
 
     Ok(GraphNode {
@@ -149,6 +183,7 @@ pub fn create_graph_node(input: CreateNodeInput, db: State<Database>) -> Result<
         x, y,
         metadata,
         project_id: input.project_id,
+        domain: Some(domain),
         created_at: now.clone(),
         updated_at: now,
     })
@@ -170,11 +205,12 @@ pub fn create_graph_edge(input: CreateEdgeInput, db: State<Database>) -> Result<
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let id = uuid::Uuid::new_v4().to_string();
     let now = chrono::Utc::now().to_rfc3339();
+    let edge_type = input.edge_type.unwrap_or_else(|| "conceptual".to_string());
 
     conn.execute(
-        "INSERT INTO graph_edges (id, source_id, target_id, label, metadata, project_id, created_at)
-         VALUES (?1, ?2, ?3, ?4, '{}', ?5, ?6)",
-        params![id, input.source_id, input.target_id, input.label, input.project_id, now],
+        "INSERT INTO graph_edges (id, source_id, target_id, label, metadata, project_id, edge_type, created_at)
+         VALUES (?1, ?2, ?3, ?4, '{}', ?5, ?6, ?7)",
+        params![id, input.source_id, input.target_id, input.label, input.project_id, edge_type, now],
     ).map_err(|e| e.to_string())?;
 
     Ok(GraphEdge {
@@ -184,6 +220,7 @@ pub fn create_graph_edge(input: CreateEdgeInput, db: State<Database>) -> Result<
         label: input.label,
         metadata: "{}".to_string(),
         project_id: input.project_id,
+        edge_type: Some(edge_type),
         created_at: now,
     })
 }

@@ -23,6 +23,8 @@ export interface Project {
   color?: string;
   is_pinned: boolean;
   persona_id?: string;
+  folder_path?: string | null;
+  allow_global_memories?: boolean;
   last_opened_at?: string;
   created_at: string;
   updated_at: string;
@@ -75,6 +77,7 @@ export interface Memory {
   content: string;
   category: MemoryCategory;
   source_session?: string;
+  project_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -90,6 +93,7 @@ export interface GraphNode {
   y: number;
   metadata: string;
   project_id?: string;
+  domain?: 'code' | 'conversation';
   created_at: string;
   updated_at: string;
 }
@@ -101,6 +105,7 @@ export interface GraphEdge {
   label?: string;
   metadata: string;
   project_id?: string;
+  edge_type?: 'structural' | 'conceptual' | 'bridge';
   created_at: string;
 }
 
@@ -242,6 +247,8 @@ export interface AppSettings {
   theme: 'paper-light' | 'dark';
   extraction_model: string;
   default_persona_id: string;
+  enable_system_one?: boolean;
+  system_one_model?: string;
 }
 
 export type SessionTag = 'RESEARCH' | 'WRITING' | 'READING' | 'DESIGN' | 'CODING' | 'OTHER';

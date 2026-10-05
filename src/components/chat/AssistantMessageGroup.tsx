@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Copy, RotateCcw, Edit2, Check, ChevronDown, ChevronRight, Brain, GitBranch, Wrench, Clock, CheckCircle2 } from 'lucide-react';
+import { Copy, RotateCcw, Edit2, Check, ChevronDown, ChevronRight, Brain, GitBranch, Wrench, Clock, CheckCircle2, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -164,6 +164,7 @@ export function AssistantMessageGroup({
 
   // Compile timeline events
   const events: any[] = [];
+  let preambleContent = '';
   let finalContent = '';
   let finalMessage: Message | null = null;
   
@@ -186,62 +187,87 @@ export function AssistantMessageGroup({
       try { if (msg.tool_calls) toolCalls = JSON.parse(msg.tool_calls); } catch (e) {}
       if (toolCalls.length > 0) {
         events.push({ type: 'tool_call', calls: toolCalls, id: msg.id + '-calls', results: [] });
-      }
-      if (content) {
+        if (content) {
+          preambleContent = content;
+        }
+      } else if (content) {
         finalContent = content;
         finalMessage = msg;
       }
     }
   });
 
-  // Handle streaming
+  // Handle active tool execution vs streaming answer
+  let isExecutingTool = false;
+  let activeToolName = '';
   let isStreamThinking = false;
+
   if (streamingContent !== undefined) {
-    const { thinking: streamThink, content: streamContent, isThinking } = parseThinking(streamingContent);
-    isStreamThinking = isThinking;
-    if (streamThink) {
-      events.push({ 
-        type: 'thought', 
-        content: streamThink + (isThinking ? ' █' : ''), 
-        id: 'stream-think', 
-        streaming: isThinking 
-      });
-    }
-    if (streamContent) {
-      finalContent = streamContent;
+    if (streamingContent.startsWith('Executing tool:')) {
+      isExecutingTool = true;
+      activeToolName = streamingContent.replace('Executing tool:', '').replace('...', '').trim();
+    } else {
+      const { thinking: streamThink, content: streamContent, isThinking } = parseThinking(streamingContent);
+      isStreamThinking = isThinking;
+      if (streamThink) {
+        events.push({ 
+          type: 'thought', 
+          content: streamThink + (isThinking ? ' █' : ''), 
+          id: 'stream-think', 
+          streaming: isThinking 
+        });
+      }
+      if (streamContent) {
+        finalContent = streamContent;
+      }
     }
   }
 
-  // Auto-expand timeline if currently thinking and not explicitly collapsed
-  // We'll manage this with a simple effect:
+  // Auto-expand timeline if currently thinking or executing tool
   useEffect(() => {
-    if (isStreamThinking) {
+    if (isStreamThinking || isExecutingTool) {
       setTimelineExpanded(true);
     }
-  }, [isStreamThinking]);
+  }, [isStreamThinking, isExecutingTool]);
 
   // Determine the title for the collapsed state
   let timelineTitle = 'Thought Process';
   const firstThought = events.find(e => e.type === 'thought');
+  const firstTool = events.find(e => e.type === 'tool_call');
   if (firstThought && firstThought.content) {
-    // Extract first sentence or first 60 chars
     const firstLine = firstThought.content.split('\n')[0].replace(/<[^>]*>?/gm, '').trim();
     if (firstLine.length > 0) {
       timelineTitle = firstLine.length > 60 ? firstLine.substring(0, 60) + '...' : firstLine;
     }
+  } else if (firstTool && firstTool.calls) {
+    const toolNames = firstTool.calls.map((c: any) => c.function?.name || 'tool').join(', ');
+    timelineTitle = `Tools: ${toolNames}`;
   }
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(finalContent);
+    const textToCopy = [preambleContent, finalContent].filter(Boolean).join('\n\n');
+    await navigator.clipboard.writeText(textToCopy);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-    onCopy?.(finalContent);
+    onCopy?.(textToCopy);
   };
 
   const firstMsg = messages[0];
 
   return (
     <div className="group mb-6">
+      {/* Preamble content before tool execution */}
+      {preambleContent && (
+        <div className="prose prose-sm max-w-none text-zinc-700 mb-3">
+          <MarkdownRenderer 
+            content={preambleContent} 
+            messageId={`preamble-${firstMsg ? firstMsg.id : 'stream'}`}
+            messageIndex={messageIndex}
+          />
+        </div>
+      )}
+
+      {/* Timeline: Thoughts & Tools */}
       {events.length > 0 && (
         <div className="mb-4">
           <button
@@ -256,7 +282,7 @@ export function AssistantMessageGroup({
               )}
             </div>
             <span className="font-medium truncate">{timelineTitle}</span>
-            {isStreamThinking && (
+            {(isStreamThinking || isExecutingTool) && (
               <div className="flex gap-1 items-center h-4 ml-2">
                 <div className="h-1 w-1 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: '0ms' }} />
                 <div className="h-1 w-1 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -290,8 +316,20 @@ export function AssistantMessageGroup({
                 </div>
               ))}
 
+              {/* Active executing tool indicator */}
+              {isExecutingTool && (
+                <div className="relative">
+                  <div className="absolute -left-[25px] top-1 bg-[var(--color-verdant-bg)] rounded-full p-0.5">
+                    <Loader2 className="h-4 w-4 text-orange-500 animate-spin" />
+                  </div>
+                  <div className="text-xs text-orange-800 font-medium pl-2 py-1">
+                    Executing {activeToolName || 'tool'}...
+                  </div>
+                </div>
+              )}
+
               {/* Done Marker */}
-              {finalContent && !isStreamThinking && (
+              {finalContent && !isStreamThinking && !isExecutingTool && (
                 <div className="relative mt-2">
                   <div className="absolute -left-[25px] top-1 bg-[var(--color-verdant-bg)] rounded-full p-0.5">
                     <CheckCircle2 className="h-4 w-4 text-zinc-500" />
@@ -306,6 +344,7 @@ export function AssistantMessageGroup({
         </div>
       )}
 
+      {/* Final Answer / Streaming Answer */}
       {finalContent ? (
         <div className="prose prose-sm max-w-none text-zinc-700 mt-2">
           <MarkdownRenderer 
@@ -316,17 +355,17 @@ export function AssistantMessageGroup({
           />
         </div>
       ) : (
-        !isStreamThinking && (
-           <div className="flex gap-1 items-center h-5 mt-2">
-             <div className="h-1.5 w-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-             <div className="h-1.5 w-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-             <div className="h-1.5 w-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: '300ms' }} />
-           </div>
+        streamingContent !== undefined && !isStreamThinking && (
+          <div className="flex gap-1 items-center h-5 mt-2">
+            <div className="h-1.5 w-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+            <div className="h-1.5 w-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+            <div className="h-1.5 w-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+          </div>
         )
       )}
 
       {/* Action buttons */}
-      {finalMessage && (
+      {(finalMessage || preambleContent) && (
         <div className="flex items-center justify-between mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
           <div className="flex items-center gap-2">
             <button
@@ -379,7 +418,7 @@ export function AssistantMessageGroup({
             )}
           </div>
           <div className="text-[10px] text-zinc-400 font-mono select-none pr-2">
-            {new Intl.DateTimeFormat('default', { hour: 'numeric', minute: '2-digit' }).format(new Date((finalMessage as Message).created_at))}
+            {(finalMessage || firstMsg)?.created_at && new Intl.DateTimeFormat('default', { hour: 'numeric', minute: '2-digit' }).format(new Date((finalMessage || firstMsg)!.created_at))}
           </div>
         </div>
       )}

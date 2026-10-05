@@ -20,6 +20,7 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useProviderStore } from '@/stores/providerStore';
 import { providerRegistry } from '@/providers/registry';
 import { extractGraphFromConversation } from '@/services/graphExtraction';
+import { matchDecisionToSymbol } from '@/services/systemOneService';
 import { invoke } from '@tauri-apps/api/core';
 import { NODE_CATEGORY_COLORS } from '@/types';
 import type { NodeCategory, GraphNode } from '@/types';
@@ -197,7 +198,7 @@ export function KnowledgeGraphPanel() {
             conversation_type: conversationType,
           });
 
-          const newNode = await addNode(n.label, n.category, x, y, projectId, metadata);
+          const newNode = await addNode(n.label, n.category, x, y, projectId, metadata, 'conversation');
           labelToId[n.label.toLowerCase()] = newNode.id;
         }
       }
@@ -214,7 +215,51 @@ export function KnowledgeGraphPanel() {
           );
 
           if (!edgeExists) {
-            await addEdge(sourceId, targetId, e.label, projectId);
+            await addEdge(sourceId, targetId, e.label, projectId, 'conceptual');
+          }
+        }
+      }
+
+      // Bridge edges: connect conversation decisions/actions/insights to codebase AST nodes
+      if (projectId) {
+        const codeNodes = storeNodes.filter(
+          (sn) => sn.project_id === projectId && sn.domain === 'code'
+        );
+
+        if (codeNodes.length > 0) {
+          const candidateSymbols = codeNodes.map((cn) => cn.label);
+
+          for (const n of extractedNodes) {
+            if (['DECISION', 'ACTION', 'INSIGHT', 'TOOL'].includes(n.category) || n.relevance >= 0.7) {
+              try {
+                const { matchedSymbol, relation } = await matchDecisionToSymbol(
+                  settings.ollama_host || defaultProvider.endpoint,
+                  settings.system_one_model || 'clef-flash',
+                  n.label,
+                  candidateSymbols
+                );
+
+                if (matchedSymbol) {
+                  const targetCodeNode = codeNodes.find((cn) => cn.label === matchedSymbol);
+                  const convNodeId = labelToId[n.label.toLowerCase()];
+
+                  if (targetCodeNode && convNodeId) {
+                    const bridgeExists = storeEdges.some(
+                      (se) =>
+                        se.edge_type === 'bridge' &&
+                        ((se.source_id === convNodeId && se.target_id === targetCodeNode.id) ||
+                         (se.source_id === targetCodeNode.id && se.target_id === convNodeId))
+                    );
+
+                    if (!bridgeExists) {
+                      await addEdge(convNodeId, targetCodeNode.id, relation, projectId, 'bridge');
+                    }
+                  }
+                }
+              } catch (bridgeErr) {
+                console.warn('[BridgeExtractor] Error matching bridge edge:', bridgeErr);
+              }
+            }
           }
         }
       }
@@ -228,7 +273,7 @@ export function KnowledgeGraphPanel() {
         },
       });
 
-      await fetchGraph();
+      await fetchGraph(projectId);
     } catch (e) {
       console.error('Extraction failed:', e);
       alert(`Failed to extract graph: ${e instanceof Error ? e.message : String(e)}`);

@@ -19,16 +19,23 @@ export function ProjectChatTab({ projectId, projectSessions }: ProjectChatTabPro
   const { filesByProject } = useProjectStore();
   const { models, modelsLoading, activeModelId, setActiveModel } = useModels();
 
+  const project = useProjectStore((s) => s.projects.find((p) => p.id === projectId));
+
   const baseContextTokens = React.useMemo(() => {
+    let tokens = 0;
+    if (project?.folder_path) {
+      tokens += 800; // estimated workspace file tree & manifest
+    }
     const files = filesByProject[projectId] || [];
-    return files.reduce((acc, f) => {
+    tokens += files.reduce((acc, f) => {
       if (f.include_mode === 'reference') return acc;
       if (f.include_mode === 'summary' && f.summary) {
         return acc + Math.ceil(f.summary.length / 4);
       }
       return acc + Math.ceil((f.size || 0) / 4);
     }, 0);
-  }, [filesByProject, projectId]);
+    return tokens;
+  }, [filesByProject, projectId, project?.folder_path]);
 
   const handleStart = async (prompt: string) => {
     const title = prompt.slice(0, 50).trim() || 'Untitled';
@@ -46,7 +53,7 @@ export function ProjectChatTab({ projectId, projectSessions }: ProjectChatTabPro
           selectedModelId={activeModelId}
           onModelChange={setActiveModel}
           modelsLoading={modelsLoading}
-          placeholder="Start a new session in this project..."
+          placeholder={project?.folder_path ? `Ask anything about ${project.name} codebase...` : "Start a new session in this project..."}
           dropdownDirection="down"
           baseContextTokens={baseContextTokens}
         />

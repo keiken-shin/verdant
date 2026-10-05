@@ -50,6 +50,16 @@ pub fn run() {
             commands::project_files::delete_project_file,
             commands::project_files::update_project_file_mode,
             commands::project_files::update_project_file_summary,
+            // Project folders & local filesystem
+            commands::project_folders::scan_project_folder,
+            commands::project_folders::read_project_file_content,
+            commands::project_folders::get_project_workspace_summary,
+            commands::project_folders::parse_codebase_to_graph,
+            commands::project_folders::prepare_project_code_chunks,
+            commands::project_folders::get_code_chunks_count,
+            commands::project_folders::clear_code_chunks,
+            commands::project_folders::index_code_chunks,
+            commands::project_folders::search_code_chunks,
             // Messages
             commands::messages::get_messages,
             commands::messages::create_message,

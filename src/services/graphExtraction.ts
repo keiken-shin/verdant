@@ -8,6 +8,7 @@ export interface ExtractedNode {
   category: NodeCategory;
   /** 0.0–1.0: how central is this node to the conversation's core purpose? */
   relevance: number;
+  domain?: 'code' | 'conversation';
 }
 
 export interface ExtractedEdge {
@@ -15,6 +16,7 @@ export interface ExtractedEdge {
   target: string;
   /** Typed relationship verb */
   label?: string;
+  edgeType?: 'structural' | 'conceptual' | 'bridge';
 }
 
 export interface ExtractionResult {

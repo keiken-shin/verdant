@@ -9,20 +9,53 @@ interface GraphNodeData {
   category: NodeCategory;
   color?: string;
   selected?: boolean;
-  /** 0.0–1.0 — controls visual prominence. Low relevance nodes are de-emphasized. */
   relevance?: number;
+  domain?: 'code' | 'conversation';
+  kind?: string;
 }
 
 export const KnowledgeGraphNode = memo(function KnowledgeGraphNode({ data, selected }: NodeProps<GraphNodeData>) {
-  const color = data.color || NODE_CATEGORY_COLORS[data.category] || '#5A67D8';
+  const isCode = data.domain === 'code';
+  const color = data.color || (isCode ? '#10B981' : NODE_CATEGORY_COLORS[data.category] || '#5A67D8');
   const relevance = data.relevance ?? 0.5;
 
-  // Visual encoding for relevance:
-  // - High (≥0.7):  full opacity, slightly larger dot
-  // - Mid (0.4–0.7): normal
-  // - Low (<0.4):   reduced opacity, muted styling
   const isHighRelevance = relevance >= 0.7;
   const isLowRelevance = relevance < 0.35;
+
+  if (isCode) {
+    return (
+      <div
+        className={cn(
+          'relative flex items-center gap-2 px-3 py-1.5 rounded-md border font-mono text-xs cursor-default bg-zinc-900 text-zinc-100 transition-shadow',
+          selected ? 'ring-2 ring-emerald-500 shadow-md' : 'border-zinc-800 shadow-sm hover:border-zinc-700'
+        )}
+      >
+        <div
+          className="w-2 h-2 rounded-sm shrink-0"
+          style={{ backgroundColor: color }}
+        />
+        <span className="whitespace-nowrap max-w-[160px] truncate font-semibold">
+          {data.label}
+        </span>
+        <span className="text-[9px] text-zinc-400 uppercase bg-zinc-800 px-1 py-0.5 rounded ml-1">
+          {data.kind || data.category}
+        </span>
+
+        <Handle
+          type="target"
+          position={Position.Left}
+          className="opacity-0 w-2 h-2 border-0"
+          style={{ background: 'transparent' }}
+        />
+        <Handle
+          type="source"
+          position={Position.Right}
+          className="opacity-0 w-2 h-2 border-0"
+          style={{ background: 'transparent' }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div

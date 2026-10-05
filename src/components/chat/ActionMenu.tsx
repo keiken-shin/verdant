@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Plus, Paperclip, Globe, Check, PanelRight } from 'lucide-react';
+import { Plus, Paperclip, Globe, Check, PanelRight, Code2 } from 'lucide-react';
 import { cn } from '@/utils';
 import { availableTools } from '@/services/toolExecution';
 
@@ -77,6 +77,15 @@ export function ActionMenu({ sessionId, onAttach, selectedTools, onToggleTool, d
               {webSearchSelected && <Check className="h-4 w-4 text-blue-600" />}
             </button>
           ))}
+
+          <button
+            onClick={() => onToggleTool('workspace_tools')}
+            className="w-full text-left px-4 py-2 text-sm hover:bg-zinc-50 flex items-center gap-3 transition-colors text-zinc-700 font-medium group"
+          >
+            <Code2 className="h-4 w-4 text-amber-500" />
+            <span className="flex-1">Workspace Code Tools</span>
+            {selectedTools.includes('workspace_tools') && <Check className="h-4 w-4 text-amber-600" />}
+          </button>
           
           <button
             onClick={() => onToggleTool('canvas')}
