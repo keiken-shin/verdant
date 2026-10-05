@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { useProviderStore } from '@/stores/providerStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { providerRegistry } from '@/providers/registry';
+import { isChatModel } from '@/utils';
 import type { ModelInfo } from '@/types';
 
-// Loads models from the default provider (health check + list) and seeds the
-// active model. Shared by ChatPage and the project workspace chat box.
+// Loads chat models from the default provider (health check + list) and seeds the
+// active model. Filters out System-1 decision models and embedding models.
+// Shared by ChatPage and the project workspace chat box.
 export function useModels() {
   const { providers, activeModelId, setActiveModel, setIsConnected } = useProviderStore();
   const { settings } = useSettingsStore();
@@ -25,9 +27,13 @@ export function useModels() {
         setIsConnected(health.connected);
         if (health.connected) {
           const fetched = await provider.listModels();
-          setModels(fetched);
-          if (!useProviderStore.getState().activeModelId && fetched.length > 0) {
-            setActiveModel(fetched[0].id);
+          const chatModels = fetched.filter((m) => isChatModel(m, settings.system_one_model));
+          setModels(chatModels);
+
+          const currentActive = useProviderStore.getState().activeModelId;
+          const isCurrentActiveValid = currentActive && chatModels.some(m => m.id === currentActive);
+          if ((!currentActive || !isCurrentActiveValid) && chatModels.length > 0) {
+            setActiveModel(chatModels[0].id);
           }
         }
       } catch {
@@ -37,7 +43,7 @@ export function useModels() {
       }
     };
     if (providers.length > 0) load();
-  }, [providers, settings.ollama_host]);
+  }, [providers, settings.ollama_host, settings.system_one_model]);
 
   return { models, modelsLoading, activeModelId, setActiveModel };
 }

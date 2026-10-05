@@ -5,9 +5,22 @@ import { useProviderStore } from '@/stores/providerStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { providerRegistry } from '@/providers/registry';
 import type { ModelInfo } from '@/types';
-import { cn } from '@/utils';
+import { cn, isSystemOneModel, isEmbeddingModel, isChatModel } from '@/utils';
 
-function ModelRow({ model, isActive, onUse }: { model: ModelInfo; isActive: boolean; onUse: (id: string) => void }) {
+function ModelRow({
+  model,
+  isActive,
+  onUse,
+  systemOneConfig,
+}: {
+  model: ModelInfo;
+  isActive: boolean;
+  onUse: (id: string) => void;
+  systemOneConfig?: string;
+}) {
+  const isSysOne = isSystemOneModel(model.id, systemOneConfig) || isSystemOneModel(model.name, systemOneConfig);
+  const isEmbed = isEmbeddingModel(model.id) || isEmbeddingModel(model.name);
+
   return (
     <tr
       className={cn(
@@ -24,7 +37,19 @@ function ModelRow({ model, isActive, onUse }: { model: ModelInfo; isActive: bool
             <Cpu className={cn('h-3.5 w-3.5', isActive ? 'text-[var(--color-verdant-primary)]' : 'text-zinc-400')} />
           </div>
           <div>
-            <div className="font-mono text-sm text-zinc-800 font-medium">{model.name}</div>
+            <div className="font-mono text-sm text-zinc-800 font-medium flex items-center gap-2">
+              <span>{model.name}</span>
+              {isSysOne && (
+                <span className="text-[10px] font-sans px-2 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-700 font-medium">
+                  System-1
+                </span>
+              )}
+              {isEmbed && (
+                <span className="text-[10px] font-sans px-2 py-0.5 rounded border border-blue-200 bg-blue-50 text-blue-700 font-medium">
+                  Embedding
+                </span>
+              )}
+            </div>
             <div className="text-xs text-zinc-400">
               {model.vendor && `${model.vendor}`}
               {model.pulledAt && ` · pulled ${new Date(model.pulledAt).toLocaleDateString()}`}
@@ -39,7 +64,11 @@ function ModelRow({ model, isActive, onUse }: { model: ModelInfo; isActive: bool
         {model.contextLength ? `${model.contextLength >= 1000 ? `${model.contextLength / 1000}k` : model.contextLength}` : '—'}
       </td>
       <td className="py-4 text-right pr-4">
-        {isActive ? (
+        {isSysOne || isEmbed ? (
+          <span className="text-xs text-zinc-400 font-mono italic">
+            specialized
+          </span>
+        ) : isActive ? (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-[var(--color-verdant-primary)] text-xs text-[var(--color-verdant-primary)] font-medium">
             ✓ active
           </span>
@@ -143,6 +172,7 @@ export function ModelsPage() {
                 model={model}
                 isActive={model.id === activeModelId}
                 onUse={setActiveModel}
+                systemOneConfig={settings.system_one_model}
               />
             ))}
           </tbody>

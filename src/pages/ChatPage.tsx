@@ -19,9 +19,10 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { buildProjectContext } from '@/services/sessionContext';
 import { getOllamaEmbedding, searchProjectCodeVectors } from '@/services/embeddingService';
-import { shouldRetrieveCodeContext } from '@/services/systemOneService';
+import { shouldRetrieveCodeContext, evaluateMemoryFromDialogue } from '@/services/systemOneService';
+import { useMemoryStore } from '@/stores/memoryStore';
 import { useModels } from '@/hooks/useModels';
-import type { Message, ChatMessage } from '@/types';
+import type { Message, ChatMessage, Memory } from '@/types';
 import { cn } from '@/utils';
 
 import { providerRegistry } from '@/providers/registry';
@@ -337,6 +338,20 @@ export function ChatPage() {
           console.error('Failed to build project context:', e);
         }
       }
+    } else {
+      // Global chat memory context: inject global memories
+      try {
+        const globalMemories = await invoke<Memory[]>('get_memories', { projectId: null });
+        if (globalMemories && globalMemories.length > 0) {
+          const memLines = globalMemories.slice(0, 15).map((m) => `- [${m.category}] ${m.content}`).join('\n');
+          history.unshift({
+            role: 'system',
+            content: `# What you remember about the user:\n${memLines}`,
+          });
+        }
+      } catch (memErr) {
+        console.warn('[Chat] Failed to load global memories:', memErr);
+      }
     }
 
     // Persona context: prepend the persona prompt as a system message.
@@ -450,7 +465,44 @@ export function ChatPage() {
     setStreamingParentId(null);
     setStreamingContent('');
     setAbortController(null);
-  }, [activeModelId, sessionId, providers, settings.ollama_host, settings.extraction_model, createSession, updateSession, addMessage, fetchProjectFiles, setAbortController, setIsStreaming, setStreamingContent, appendStreamingContent, navigate, setStreamingSessionId]);
+
+    // Background autonomous memory selection & prioritization via System-1
+    if (settings.auto_remember !== false) {
+      (async () => {
+        try {
+          const sys1Model = settings.enable_system_one && settings.system_one_model
+            ? settings.system_one_model
+            : 'clef';
+          const host = settings.ollama_host || 'http://127.0.0.1:11434';
+          const memoryStore = useMemoryStore.getState();
+          if (memoryStore.memories.length === 0) {
+            await memoryStore.fetchMemories(sessionProjectId || undefined);
+          }
+          const existingMemories = memoryStore.memories;
+
+          const evaluated = await evaluateMemoryFromDialogue(
+            host,
+            sys1Model,
+            content,
+            undefined,
+            existingMemories
+          );
+
+          if (evaluated && evaluated.shouldStore) {
+            console.log('[AutoMemory] System-1 selected & prioritized memory:', evaluated);
+            await memoryStore.createMemory(
+              evaluated.content,
+              evaluated.category,
+              sid,
+              sessionProjectId || undefined
+            );
+          }
+        } catch (memErr) {
+          console.warn('[AutoMemory] Background memory evaluation failed:', memErr);
+        }
+      })();
+    }
+  }, [activeModelId, sessionId, providers, settings.ollama_host, settings.extraction_model, settings.auto_remember, settings.enable_system_one, settings.system_one_model, createSession, updateSession, addMessage, fetchProjectFiles, setAbortController, setIsStreaming, setStreamingContent, appendStreamingContent, navigate, setStreamingSessionId]);
 
   // Auto-send an initial prompt passed from the project workspace (one-shot).
   // Gated on activeModelId: on a cold start models may still be loading, and
@@ -563,6 +615,20 @@ export function ChatPage() {
             });
             if (systemMsg) history.unshift({ role: 'system', content: systemMsg });
           }
+        } else {
+          // Global chat memory context: inject global memories
+          try {
+            const globalMemories = await invoke<Memory[]>('get_memories', { projectId: null });
+            if (globalMemories && globalMemories.length > 0) {
+              const memLines = globalMemories.slice(0, 15).map((m) => `- [${m.category}] ${m.content}`).join('\n');
+              history.unshift({
+                role: 'system',
+                content: `# What you remember about the user:\n${memLines}`,
+              });
+            }
+          } catch (memErr) {
+            console.warn('[Chat] Failed to load global memories on regenerate:', memErr);
+          }
         }
         
         const state = useSessionStore.getState();
@@ -604,6 +670,40 @@ export function ChatPage() {
             }
           }
         }
+
+        // Background autonomous memory selection & prioritization on regenerate
+        if (settings.auto_remember !== false && parentMsg.role === 'user') {
+          (async () => {
+            try {
+              const sys1Model = settings.enable_system_one && settings.system_one_model
+                ? settings.system_one_model
+                : 'clef';
+              const host = settings.ollama_host || 'http://127.0.0.1:11434';
+              const memoryStore = useMemoryStore.getState();
+              const existingMemories = memoryStore.memories;
+
+              const evaluated = await evaluateMemoryFromDialogue(
+                host,
+                sys1Model,
+                parentMsg.content,
+                undefined,
+                existingMemories
+              );
+
+              if (evaluated && evaluated.shouldStore) {
+                console.log('[AutoMemory] System-1 selected & prioritized memory on regenerate:', evaluated);
+                await memoryStore.createMemory(
+                  evaluated.content,
+                  evaluated.category,
+                  sessionId,
+                  currentSession?.project_id || undefined
+                );
+              }
+            } catch (err) {
+              console.warn('[AutoMemory] Background memory evaluation on regenerate failed:', err);
+            }
+          })();
+        }
       } catch (e: unknown) {
         if (e instanceof Error && e.name !== 'AbortError') {
           await addMessage(sessionId, 'assistant', `Error: ${e.message}`, activeModelId || undefined, parentMsg.id);
@@ -616,7 +716,7 @@ export function ChatPage() {
         setAbortController(null);
       }
     }
-  }, [sessionId, activePath, messages, providers, settings.ollama_host, settings.extraction_model, activeModelId, setIsStreaming, setStreamingContent, setAbortController, appendStreamingContent, addMessage]);
+  }, [sessionId, activePath, messages, providers, settings.ollama_host, settings.extraction_model, settings.auto_remember, settings.enable_system_one, settings.system_one_model, activeModelId, setIsStreaming, setStreamingContent, setAbortController, appendStreamingContent, addMessage]);
 
   const handleEditMessage = useCallback(async (id: string, content: string) => {
     const msg = messages.find(m => m.id === id);

@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { ChatMessage, LLMProvider, Project, ProjectFile, Session, Message } from '@/types';
+import type { ChatMessage, LLMProvider, Project, ProjectFile, Session, Message, Memory } from '@/types';
 import { parseThinking } from '@/utils';
 
 // We use a heuristic of ~4 chars per token.
@@ -84,6 +84,7 @@ export function buildProjectSystemMessage(
   relevantCodeChunks: { file_path: string; chunk_text: string; start_line: number; end_line: number }[] = [],
   workspaceSummary?: ProjectWorkspaceSummary | null,
   referencedFiles: ReferencedFile[] = [],
+  memories: Memory[] = [],
   budgetChars: number = 14000
 ): string {
   const parts: string[] = [];
@@ -142,6 +143,14 @@ export function buildProjectSystemMessage(
     .map((s) => `- ${s.title}: ${s.summary.slice(0, MAX_SUMMARY_CHARS)}`);
   if (summaryBlocks.length) {
     parts.push(`# Earlier sessions in this project\n${summaryBlocks.join('\n')}`);
+  }
+
+  if (memories.length > 0) {
+    const memoryLines = memories
+      .slice(0, 20)
+      .map((m) => `- [${m.category}] ${m.content}`)
+      .join('\n');
+    parts.push(`# What you remember about this project and user:\n${memoryLines}`);
   }
 
   // Assembly with budget checking
@@ -245,10 +254,18 @@ export async function buildProjectContext(opts: {
       })
   );
 
+  let projectMemories: Memory[] = [];
+  try {
+    projectMemories = await invoke<Memory[]>('get_memories', { projectId: project.id });
+  } catch (err) {
+    console.warn('[ProjectContext] Failed to fetch project memories:', err);
+  }
+
   const hasContext =
     project.instructions?.trim() ||
     project.description?.trim() ||
     project.folder_path?.trim() ||
+    projectMemories.length > 0 ||
     filesWithContent.some((f) => f.content_text?.trim() || f.summary?.trim()) ||
     summaries.length > 0;
   if (!hasContext) return null;
@@ -261,6 +278,7 @@ export async function buildProjectContext(opts: {
     relevantCodeChunks,
     workspaceSummary,
     referencedFiles,
+    projectMemories,
     budgetChars
   );
 }

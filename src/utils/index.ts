@@ -97,3 +97,37 @@ export function parseThinking(text: string): ParsedMessage {
   }
 }
 
+export function isSystemOneModel(modelIdOrName: string, configuredSystemOne?: string): boolean {
+  const lower = (modelIdOrName || '').toLowerCase().trim();
+  if (!lower) return false;
+  if (configuredSystemOne) {
+    const sysLower = configuredSystemOne.toLowerCase().trim();
+    if (sysLower && (lower === sysLower || lower.startsWith(`${sysLower}:`))) {
+      return true;
+    }
+  }
+  return lower.includes('clef');
+}
+
+export function isEmbeddingModel(modelIdOrName: string): boolean {
+  const lower = (modelIdOrName || '').toLowerCase().trim();
+  if (!lower) return false;
+  return (
+    lower.includes('embed') ||
+    lower.includes('bge-') ||
+    lower.includes('minilm')
+  );
+}
+
+export function isChatModel(model: { id: string; name?: string }, configuredSystemOne?: string): boolean {
+  const id = model.id || '';
+  const name = model.name || '';
+  if (isSystemOneModel(id, configuredSystemOne) || isSystemOneModel(name, configuredSystemOne)) {
+    return false;
+  }
+  if (isEmbeddingModel(id) || isEmbeddingModel(name)) {
+    return false;
+  }
+  return true;
+}
+
